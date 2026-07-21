@@ -65,6 +65,59 @@ def add_log_gsheet(action_type, item_name, detail, note=""):
         df_logs = pd.concat([df_logs, pd.DataFrame([new_log])], ignore_index=True)
         save_data(sheet_logs, df_logs)
 
+def undo_last_log():
+    """撤銷 / 復原最後一筆操作歷史"""
+    df_logs, sheet_logs = load_data("logs")
+    if df_logs.empty:
+        return False, "目前沒有可撤銷的歷史紀錄！"
+    
+    last_log = df_logs.iloc[-1]
+    action_type = last_log["類型"]
+    item_name = last_log["項目名稱"]
+    detail = str(last_log["變動數量/借用人"])
+    
+    # 1. 撤銷「領料出庫」或「進貨入庫」
+    if action_type in ["領料出庫", "進貨入庫"]:
+        df_mat, sheet_mat = load_data("materials")
+        if not df_mat.empty and item_name in df_mat["材料名稱"].values:
+            idx = df_mat[df_mat["材料名稱"] == item_name].index[0]
+            qty_str = detail.replace("個", "").replace("支", "").replace("捲", "").strip()
+            qty = int(qty_str.replace("+", "").replace("-", ""))
+            
+            if action_type == "領料出庫":
+                df_mat.loc[idx, "目前庫存"] = int(df_mat.loc[idx, "目前庫存"]) + qty
+            else:
+                df_mat.loc[idx, "目前庫存"] = max(0, int(df_mat.loc[idx, "目前庫存"]) - qty)
+                
+            save_data(sheet_mat, df_mat)
+
+    # 2. 撤銷「工具借出」、「工具歸還」或「工具送修」
+    elif action_type in ["工具借出", "工具歸還", "工具送修", "維修完成"]:
+        df_tools, sheet_tools = load_data("tools")
+        if not df_tools.empty and item_name in df_tools["工具名稱"].values:
+            idx = df_tools[df_tools["工具名稱"] == item_name].index[0]
+            
+            if action_type == "工具借出":
+                df_tools.loc[idx, "狀態"] = "在庫"
+                df_tools.loc[idx, "當前借用人"] = "無"
+                df_tools.loc[idx, "借出日期"] = "無"
+            elif action_type == "工具歸還":
+                df_tools.loc[idx, "狀態"] = "借出"
+                df_tools.loc[idx, "當前借用人"] = detail
+                df_tools.loc[idx, "借出日期"] = datetime.now().strftime("%Y-%m-%d")
+            elif action_type in ["工具送修", "維修完成"]:
+                df_tools.loc[idx, "狀態"] = "在庫"
+                df_tools.loc[idx, "當前借用人"] = "無"
+                df_tools.loc[idx, "借出日期"] = "無"
+                
+            save_data(sheet_tools, df_tools)
+
+    # 刪除最後一筆 Log 並儲存
+    df_logs = df_logs.iloc[:-1].reset_index(drop=True)
+    save_data(sheet_logs, df_logs)
+    add_log_gsheet("撤銷操作", item_name, "反轉成功", f"原操作: {action_type} ({detail})")
+    return True, f"✅ 已成功撤銷【{action_type} - {item_name}】並將數據反轉復原！"
+
 # -------------------------------------------------------------------
 # 3. 側邊欄控制與導覽目錄
 # -------------------------------------------------------------------
@@ -307,13 +360,11 @@ elif page == "🔨 工具資產追蹤":
             else:
                 st.success("🎉 目前沒有外借中的工具！")
 
-        # 🆕 損壞報修與保養管理頁籤
         with tab_maint:
             col_m1, col_m2 = st.columns(2)
             
             with col_m1:
                 st.subheader("🛠️ 登記工具送修 / 待保養")
-                # 在庫或外借中的工具都可以送修
                 can_repair_tools = df_tools[df_tools["狀態"].isin(["在庫", "借出"])]
                 if not can_repair_tools.empty:
                     tool_to_repair = st.selectbox("選擇要送修的工具", can_repair_tools["工具編號"].astype(str) + " - " + can_repair_tools["工具名稱"], key="sel_rep")
@@ -454,12 +505,30 @@ elif page == "📊 數據分析儀表板":
                 st.write("尚無工具借出或送修數據。")
 
 # -------------------------------------------------------------------
-# 分頁 4：歷史異動紀錄
+# 分頁 4：歷史異動紀錄 (含一鍵撤銷功能)
 # -------------------------------------------------------------------
 elif page == "📜 歷史異動紀錄":
     st.header("📜 系統完整流水帳歷程 (Google Sheets 即時同步)")
+    
     df_logs, _ = load_data("logs")
+    
     if not df_logs.empty:
+        st.subheader("↩️ 操作反轉與復原區域")
+        last_log = df_logs.iloc[-1]
+        st.info(f"📌 **最近一次操作紀錄：** 【{last_log['時間']}】 - 【{last_log['類型']}】 - {last_log['項目名稱']} ({last_log['變動數量/借用人']})")
+        
+        col_u1, col_u2 = st.columns([1, 4])
+        with col_u1:
+            if st.button("↩️ 一鍵撤銷最後這筆操作", type="primary"):
+                success, msg = undo_last_log()
+                if success:
+                    st.success(msg)
+                    st.rerun()
+                else:
+                    st.error(msg)
+        
+        st.markdown("---")
+        st.subheader("📋 完整歷史流水帳明細")
         st.dataframe(df_logs.sort_index(ascending=False), use_container_width=True)
 
 # -------------------------------------------------------------------
