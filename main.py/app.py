@@ -35,7 +35,6 @@ def get_gsheet_client():
         "https://www.googleapis.com/auth/spreadsheets",
         "https://www.googleapis.com/auth/drive"
     ]
-    # 從 Streamlit secrets 讀取 gcp_service_account 金鑰
     credentials_info = st.secrets["gcp_service_account"]
     creds = Credentials.from_service_account_info(credentials_info, scopes=scope)
     client = gspread.authorize(creds)
@@ -45,7 +44,6 @@ def load_data(worksheet_name):
     """讀取 Google Sheets 指定分頁"""
     try:
         client = get_gsheet_client()
-        # 打開名為 '水電倉管資料庫' 的試算表
         sheet = client.open("水電倉管資料庫").worksheet(worksheet_name)
         data = sheet.get_all_records()
         return pd.DataFrame(data), sheet
@@ -86,7 +84,6 @@ if page == "📦 材料庫存管理":
     df_mat, sheet_mat = load_data("materials")
     
     if not df_mat.empty:
-        # 強制轉型確保數字運算正確
         df_mat["目前庫存"] = pd.to_numeric(df_mat["目前庫存"], errors='coerce').fillna(0).astype(int)
         df_mat["安全庫存量"] = pd.to_numeric(df_mat["安全庫存量"], errors='coerce').fillna(0).astype(int)
         
@@ -109,7 +106,7 @@ if page == "📦 材料庫存管理":
         st.markdown("---")
         
         st.subheader("🔄 庫存異動與資料編輯面板")
-        tab1, tab2, tab3, tab4 = st.tabs(["📤 師傅領料登記", "📥 進貨入庫登記", "➕ 新增材料品項", "✏️ 修改/編輯材料資料"])
+        tab1, tab2, tab3, tab4, tab5 = st.tabs(["📤 師傅領料登記", "📥 進貨入庫登記", "➕ 新增材料品項", "✏️ 修改/編輯材料資料", "🗑️ 刪除材料品項"])
         
         with tab1:
             with st.form("borrow_material_form"):
@@ -204,6 +201,29 @@ if page == "📦 材料庫存管理":
                         st.success(f"✅ 成功更新材料 [{edit_m_id}] 資料！")
                         st.rerun()
 
+        # 🆕 刪除材料品項
+        with tab5:
+            st.subheader("🗑️ 刪除/下架材料品項")
+            selected_del_mat = st.selectbox("選擇要刪除的材料", df_mat["材料編號"].astype(str) + " - " + df_mat["材料名稱"], key="del_mat_sel")
+            
+            if selected_del_mat:
+                del_m_id = selected_del_mat.split(" - ")[0]
+                m_del_idx = df_mat[df_mat["材料編號"].astype(str) == del_m_id].index[0]
+                del_m_name = df_mat.loc[m_del_idx, "材料名稱"]
+                
+                st.warning(f"⚠️ **確定要刪除材料 [{del_m_id}] {del_m_name} 嗎？此操作將無法復原！**")
+                confirm_del_m = st.checkbox(f"我確定要刪除 [{del_m_name}]", key="chk_del_m")
+                
+                if st.button("🔥 確定執行刪除材料"):
+                    if confirm_del_m:
+                        df_mat = df_mat.drop(m_del_idx).reset_index(drop=True)
+                        save_data(sheet_mat, df_mat)
+                        add_log_gsheet("刪除品項", del_m_name, "材料刪除", f"編號: {del_m_id}")
+                        st.success(f"✅ 成功刪除材料：[{del_m_name}]！")
+                        st.rerun()
+                    else:
+                        st.error("❌ 請先勾選上方「我確定要刪除...」核取方塊！")
+
 # -------------------------------------------------------------------
 # 分頁 2：工具資產追蹤
 # -------------------------------------------------------------------
@@ -235,7 +255,7 @@ elif page == "🔨 工具資產追蹤":
         
         st.markdown("---")
         
-        tab_tb, tab_tr, tab_te = st.tabs(["📤 登記工具借出", "📥 登記工具歸還", "✏️ 修改/編輯工具資料"])
+        tab_tb, tab_tr, tab_te, tab_td = st.tabs(["📤 登記工具借出", "📥 登記工具歸還", "✏️ 修改/編輯工具資料", "🗑️ 刪除/報銷工具"])
         
         with tab_tb:
             in_stock_tools = df_tools[df_tools["狀態"] == "在庫"]
@@ -309,6 +329,29 @@ elif page == "🔨 工具資產追蹤":
                         st.success(f"✅ 成功更新工具 [{edit_tool_id}] 資料！")
                         st.rerun()
 
+        # 🆕 刪除/報銷工具品項
+        with tab_td:
+            st.subheader("🗑️ 報銷/刪除工具資產")
+            selected_del_tool = st.selectbox("選擇要報銷刪除的工具", df_tools["工具編號"].astype(str) + " - " + df_tools["工具名稱"], key="del_tool_sel")
+            
+            if selected_del_tool:
+                del_t_id = selected_del_tool.split(" - ")[0]
+                t_del_idx = df_tools[df_tools["工具編號"].astype(str) == del_t_id].index[0]
+                del_t_name = df_tools.loc[t_del_idx, "工具名稱"]
+                
+                st.warning(f"⚠️ **確定要刪除/報銷工具 [{del_t_id}] {del_t_name} 嗎？此操作將無法復原！**")
+                confirm_del_t = st.checkbox(f"我確定要報銷刪除 [{del_t_name}]", key="chk_del_t")
+                
+                if st.button("🔥 確定執行報銷刪除"):
+                    if confirm_del_t:
+                        df_tools = df_tools.drop(t_del_idx).reset_index(drop=True)
+                        save_data(sheet_tools, df_tools)
+                        add_log_gsheet("工具報銷刪除", del_t_name, "工具刪除", f"編號: {del_t_id}")
+                        st.success(f"✅ 成功刪除/報銷工具：[{del_t_name}]！")
+                        st.rerun()
+                    else:
+                        st.error("❌ 請先勾選上方「我確定要報銷刪除...」核取方塊！")
+
 # -------------------------------------------------------------------
 # 分頁 3：數據分析儀表板
 # -------------------------------------------------------------------
@@ -371,6 +414,6 @@ elif page == "⚙️ 管理員安全後台":
     
     if pwd == "admin123":
         st.success("🔓 管理員驗證成功！")
-        st.info("💡 目前資料庫已直連您的個人 Google Sheets「水電仓管資料庫」，所有異動皆即時存入 Google 雲端！")
+        st.info("💡 目前資料庫已直連您的個人 Google Sheets「水電倉管資料庫」，所有異動皆即時存入 Google 雲端！")
     elif pwd != "":
         st.error("❌ 密碼錯誤，無法開啟管理員權限！")
