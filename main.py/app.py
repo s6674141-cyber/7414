@@ -4,6 +4,7 @@ import streamlit as st
 import matplotlib.pyplot as plt
 import gspread
 from google.oauth2.service_account import Credentials
+import re
 
 # -------------------------------------------------------------------
 # 0. 跨平台中文字型自動設定
@@ -66,24 +67,25 @@ def add_log_gsheet(action_type, item_name, detail, note=""):
         save_data(sheet_logs, df_logs)
 
 def undo_last_log():
-    """撤銷 / 復原最後一筆操作歷史 (完整支援刪除復原)"""
+    """撤銷 / 復原最後一筆操作歷史 (精準還原分類、數量與安全存量)"""
     df_logs, sheet_logs = load_data("logs")
     if df_logs.empty:
         return False, "目前沒有可撤銷的歷史紀錄！"
     
     last_log = df_logs.iloc[-1]
-    action_type = last_log["類型"]
-    item_name = last_log["項目名稱"]
+    action_type = str(last_log["類型"])
+    item_name = str(last_log["項目名稱"])
     detail = str(last_log["變動數量/借用人"])
     note = str(last_log["備註"])
     
     # 1. 撤銷「領料出庫」或「進貨入庫」
     if action_type in ["領料出庫", "進貨入庫"]:
         df_mat, sheet_mat = load_data("materials")
-        if not df_mat.empty and item_name in df_mat["材料名稱"].values:
-            idx = df_mat[df_mat["材料名稱"] == item_name].index[0]
-            qty_str = detail.replace("個", "").replace("支", "").replace("捲", "").strip()
-            qty = int(qty_str.replace("+", "").replace("-", ""))
+        if not df_mat.empty and item_name in df_mat["材料名稱"].astype(str).values:
+            idx = df_mat[df_mat["材料名稱"].astype(str) == item_name].index[0]
+            # 抽出純數字
+            numbers = re.findall(r'\d+', detail)
+            qty = int(numbers[0]) if numbers else 0
             
             if action_type == "領料出庫":
                 df_mat.loc[idx, "目前庫存"] = int(df_mat.loc[idx, "目前庫存"]) + qty
@@ -92,27 +94,52 @@ def undo_last_log():
                 
             save_data(sheet_mat, df_mat)
 
-    # 2. 撤銷「刪除品項」(自動重新加回材料)
+    # 2. 撤銷「新增品項」(自動刪除剛剛誤建的材料)
+    elif action_type == "新增品項":
+        df_mat, sheet_mat = load_data("materials")
+        if not df_mat.empty and item_name in df_mat["材料名稱"].astype(str).values:
+            df_mat = df_mat[df_mat["材料名稱"].astype(str) != item_name].reset_index(drop=True)
+            save_data(sheet_mat, df_mat)
+
+    # 3. 撤銷「刪除品項」(精準還原分類、數量、安全存量、單位)
     elif action_type == "刪除品項":
         df_mat, sheet_mat = load_data("materials")
-        if item_name not in df_mat["材料名稱"].values:
+        if item_name not in df_mat["材料名稱"].astype(str).values:
             new_id = f"M{len(df_mat) + 1:03d}"
+            
+            # 從 note 解析備份資訊: "分類:電線類 | 庫存:100 | 安全量:10 | 單位:捲"
+            cat = "未分類"
+            qty = 0
+            safe_qty = 5
+            unit = "個"
+            
+            if "分類:" in note:
+                try:
+                    parts = note.split(" | ")
+                    for p in parts:
+                        if p.startswith("分類:"): cat = p.replace("分類:", "")
+                        elif p.startswith("庫存:"): qty = int(p.replace("庫存:", ""))
+                        elif p.startswith("安全量:"): safe_qty = int(p.replace("安全量:", ""))
+                        elif p.startswith("單位:"): unit = p.replace("單位:", "")
+                except:
+                    pass
+            
             new_row = {
                 "材料編號": new_id, 
                 "材料名稱": item_name, 
-                "分類": "未分類", 
-                "目前庫存": 0, 
-                "安全庫存量": 5, 
-                "單位": "個"
+                "分類": cat, 
+                "目前庫存": qty, 
+                "安全庫存量": safe_qty, 
+                "單位": unit
             }
             df_mat = pd.concat([df_mat, pd.DataFrame([new_row])], ignore_index=True)
             save_data(sheet_mat, df_mat)
 
-    # 3. 撤銷「工具借出」、「工具歸還」、「工具送修」或「維修完成」
+    # 4. 撤銷「工具借出」、「工具歸還」、「工具送修」或「維修完成」
     elif action_type in ["工具借出", "工具歸還", "工具送修", "維修完成"]:
         df_tools, sheet_tools = load_data("tools")
-        if not df_tools.empty and item_name in df_tools["工具名稱"].values:
-            idx = df_tools[df_tools["工具名稱"] == item_name].index[0]
+        if not df_tools.empty and item_name in df_tools["工具名稱"].astype(str).values:
+            idx = df_tools[df_tools["工具名稱"].astype(str) == item_name].index[0]
             
             if action_type == "工具借出":
                 df_tools.loc[idx, "狀態"] = "在庫"
@@ -129,15 +156,19 @@ def undo_last_log():
                 
             save_data(sheet_tools, df_tools)
 
-    # 4. 撤銷「工具報銷刪除」(自動重新加回工具)
+    # 5. 撤銷「工具報銷刪除」(自動精準還原工具)
     elif action_type == "工具報銷刪除":
         df_tools, sheet_tools = load_data("tools")
-        if item_name not in df_tools["工具名稱"].values:
+        if item_name not in df_tools["工具名稱"].astype(str).values:
             new_id = f"T{len(df_tools) + 1:03d}"
+            cat = "未分類"
+            if "分類:" in note:
+                cat = note.replace("分類:", "").strip()
+                
             new_row = {
                 "工具編號": new_id,
                 "工具名稱": item_name,
-                "分類": "未分類",
+                "分類": cat,
                 "狀態": "在庫",
                 "當前借用人": "無",
                 "借出日期": "無"
@@ -148,8 +179,8 @@ def undo_last_log():
     # 刪除最後一筆 Log 並儲存
     df_logs = df_logs.iloc[:-1].reset_index(drop=True)
     save_data(sheet_logs, df_logs)
-    add_log_gsheet("撤銷操作", item_name, "反轉成功", f"原操作: {action_type} ({detail})")
-    return True, f"✅ 已成功撤銷【{action_type} - {item_name}】並將品項復原！"
+    add_log_gsheet("撤銷操作", item_name, "反轉成功", f"已撤銷: {action_type} ({detail})")
+    return True, f"✅ 已成功撤銷【{action_type} - {item_name}】並還原資料庫！"
 
 # -------------------------------------------------------------------
 # 3. 側邊欄控制與導覽目錄
@@ -250,7 +281,7 @@ if page == "📦 材料庫存管理":
                     new_row = {"材料編號": new_id, "材料名稱": new_name, "分類": new_cat, "目前庫存": init_qty, "安全庫存量": safe_qty, "單位": unit_str}
                     df_mat = pd.concat([df_mat, pd.DataFrame([new_row])], ignore_index=True)
                     save_data(sheet_mat, df_mat)
-                    add_log_gsheet("新增品項", new_name, f"+{init_qty}{unit_str}", "新品建檔")
+                    add_log_gsheet("新增品項", new_name, f"+{init_qty}{unit_str}", f"分類:{new_cat} | 庫存:{init_qty} | 安全量:{safe_qty} | 單位:{unit_str}")
                     st.success(f"✅ 成功新增品項：[{new_id}] {new_name}！")
                     st.rerun()
 
@@ -295,6 +326,10 @@ if page == "📦 材料庫存管理":
                 del_m_id = selected_del_mat.split(" - ")[0]
                 m_del_idx = df_mat[df_mat["材料編號"].astype(str) == del_m_id].index[0]
                 del_m_name = df_mat.loc[m_del_idx, "材料名稱"]
+                del_cat = df_mat.loc[m_del_idx, "分類"]
+                del_qty = df_mat.loc[m_del_idx, "目前庫存"]
+                del_safe = df_mat.loc[m_del_idx, "安全庫存量"]
+                del_unit = df_mat.loc[m_del_idx, "單位"]
                 
                 st.warning(f"⚠️ **確定要刪除材料 [{del_m_id}] {del_m_name} 嗎？此操作將無法復原！**")
                 confirm_del_m = st.checkbox(f"我確定要刪除 [{del_m_name}]", key="chk_del_m")
@@ -303,7 +338,9 @@ if page == "📦 材料庫存管理":
                     if confirm_del_m:
                         df_mat = df_mat.drop(m_del_idx).reset_index(drop=True)
                         save_data(sheet_mat, df_mat)
-                        add_log_gsheet("刪除品項", del_m_name, "材料刪除", f"編號: {del_m_id}")
+                        # 將刪除前的數據打包備份在 Note 裡面！
+                        backup_note = f"分類:{del_cat} | 庫存:{del_qty} | 安全量:{del_safe} | 單位:{del_unit}"
+                        add_log_gsheet("刪除品項", del_m_name, "材料刪除", backup_note)
                         st.success(f"✅ 成功刪除材料：[{del_m_name}]！")
                         st.rerun()
                     else:
@@ -482,6 +519,7 @@ elif page == "🔨 工具資產追蹤":
                 del_t_id = selected_del_tool.split(" - ")[0]
                 t_del_idx = df_tools[df_tools["工具編號"].astype(str) == del_t_id].index[0]
                 del_t_name = df_tools.loc[t_del_idx, "工具名稱"]
+                del_t_cat = df_tools.loc[t_del_idx, "分類"]
                 
                 st.warning(f"⚠️ **確定要刪除/報銷工具 [{del_t_id}] {del_t_name} 嗎？此操作將無法復原！**")
                 confirm_del_t = st.checkbox(f"我確定要報銷刪除 [{del_t_name}]", key="chk_del_t")
@@ -490,7 +528,7 @@ elif page == "🔨 工具資產追蹤":
                     if confirm_del_t:
                         df_tools = df_tools.drop(t_del_idx).reset_index(drop=True)
                         save_data(sheet_tools, df_tools)
-                        add_log_gsheet("工具報銷刪除", del_t_name, "工具刪除", f"編號: {del_t_id}")
+                        add_log_gsheet("工具報銷刪除", del_t_name, "工具刪除", f"分類:{del_t_cat}")
                         st.success(f"✅ 成功刪除/報銷工具：[{del_t_name}]！")
                         st.rerun()
                     else:
@@ -538,7 +576,7 @@ elif page == "📊 數據分析儀表板":
                 st.write("尚無工具借出或送修數據。")
 
 # -------------------------------------------------------------------
-# 分頁 4：歷史異動紀錄 (含完整刪除復原功能)
+# 分頁 4：歷史異動紀錄
 # -------------------------------------------------------------------
 elif page == "📜 歷史異動紀錄":
     st.header("📜 系統完整流水帳歷程 (Google Sheets 即時同步)")
