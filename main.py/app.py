@@ -201,7 +201,6 @@ if page == "📦 材料庫存管理":
                         st.success(f"✅ 成功更新材料 [{edit_m_id}] 資料！")
                         st.rerun()
 
-        # 🆕 刪除材料品項
         with tab5:
             st.subheader("🗑️ 刪除/下架材料品項")
             selected_del_mat = st.selectbox("選擇要刪除的材料", df_mat["材料編號"].astype(str) + " - " + df_mat["材料名稱"], key="del_mat_sel")
@@ -225,37 +224,45 @@ if page == "📦 材料庫存管理":
                         st.error("❌ 請先勾選上方「我確定要刪除...」核取方塊！")
 
 # -------------------------------------------------------------------
-# 分頁 2：工具資產追蹤
+# 分頁 2：工具資產追蹤 (含維修/保養流程)
 # -------------------------------------------------------------------
 elif page == "🔨 工具資產追蹤":
-    st.header("🔨 固定資產與高價工具借還追蹤 (Google Sheets 雲端連線)")
+    st.header("🔨 固定資產與高價工具借還與維修追蹤")
     
     df_tools, sheet_tools = load_data("tools")
     
     if not df_tools.empty:
         borrowed_df = df_tools[df_tools["狀態"] == "借出"]
+        repairing_df = df_tools[df_tools["狀態"] == "維修中"]
         
-        col1, col2 = st.columns(2)
+        col1, col2, col3 = st.columns(3)
         col1.metric("工具總數量", f"{len(df_tools)} 件")
         col2.metric("目前外借中工具", f"{len(borrowed_df)} 件")
+        col3.metric("🔧 維修/待保養中", f"{len(repairing_df)} 件", delta_color="inverse")
         
         st.markdown("---")
         
         st.subheader("📋 所有工具清單與當前狀態")
         
-        categories = ["全部類別"] + list(df_tools["分類"].unique())
-        selected_cat = st.selectbox("🔍 依工具類別篩選", categories)
-        
+        col_f1, col_f2 = st.columns(2)
+        with col_f1:
+            categories = ["全部類別"] + list(df_tools["分類"].unique())
+            selected_cat = st.selectbox("🔍 依工具類別篩選", categories)
+        with col_f2:
+            status_opts = ["全部狀態", "在庫", "借出", "維修中"]
+            selected_status = st.selectbox("🔍 依使用狀態篩選", status_opts)
+            
+        display_tools = df_tools.copy()
         if selected_cat != "全部類別":
-            display_tools = df_tools[df_tools["分類"] == selected_cat]
-        else:
-            display_tools = df_tools
+            display_tools = display_tools[display_tools["分類"] == selected_cat]
+        if selected_status != "全部狀態":
+            display_tools = display_tools[display_tools["狀態"] == selected_status]
             
         st.dataframe(display_tools, use_container_width=True)
         
         st.markdown("---")
         
-        tab_tb, tab_tr, tab_te, tab_td = st.tabs(["📤 登記工具借出", "📥 登記工具歸還", "✏️ 修改/編輯工具資料", "🗑️ 刪除/報銷工具"])
+        tab_tb, tab_tr, tab_maint, tab_te, tab_td = st.tabs(["📤 登記工具借出", "📥 登記工具歸還", "🔧 損壞報修 / 維修完成", "✏️ 修改/編輯工具", "🗑️ 報銷刪除工具"])
         
         with tab_tb:
             in_stock_tools = df_tools[df_tools["狀態"] == "在庫"]
@@ -279,7 +286,7 @@ elif page == "🔨 工具資產追蹤":
                     else:
                         st.warning("⚠️ 請輸入借用師傅姓名！")
             else:
-                st.info("目前所有工具皆外借中，無在庫工具。")
+                st.info("目前無在庫可借出工具（全部外借中或維修中）。")
 
         with tab_tr:
             if not borrowed_df.empty:
@@ -298,7 +305,61 @@ elif page == "🔨 工具資產追蹤":
                     st.success(f"✅ [{df_tools.loc[idx, '工具名稱']}] 已歸還入庫！")
                     st.rerun()
             else:
-                st.success("🎉 目前所有工具皆在庫，沒有外借中的工具！")
+                st.success("🎉 目前沒有外借中的工具！")
+
+        # 🆕 損壞報修與保養管理頁籤
+        with tab_maint:
+            col_m1, col_m2 = st.columns(2)
+            
+            with col_m1:
+                st.subheader("🛠️ 登記工具送修 / 待保養")
+                # 在庫或外借中的工具都可以送修
+                can_repair_tools = df_tools[df_tools["狀態"].isin(["在庫", "借出"])]
+                if not can_repair_tools.empty:
+                    tool_to_repair = st.selectbox("選擇要送修的工具", can_repair_tools["工具編號"].astype(str) + " - " + can_repair_tools["工具名稱"], key="sel_rep")
+                    repair_reason = st.text_input("故障原因 / 保養項目 (例: 電池壞掉 / 電線接觸不良)")
+                    repair_vendor = st.text_input("維修廠商 / 送修備註 (選填)")
+                    
+                    if st.button("🔧 確認登記送修"):
+                        if repair_reason:
+                            t_id = tool_to_repair.split(" - ")[0]
+                            idx = df_tools[df_tools["工具編號"].astype(str) == t_id].index[0]
+                            t_name = df_tools.loc[idx, "工具名稱"]
+                            
+                            df_tools.loc[idx, "狀態"] = "維修中"
+                            df_tools.loc[idx, "當前借用人"] = f"維修中 ({repair_vendor})" if repair_vendor else "維修中"
+                            df_tools.loc[idx, "借出日期"] = datetime.now().strftime("%Y-%m-%d")
+                            
+                            save_data(sheet_tools, df_tools)
+                            add_log_gsheet("工具送修", t_name, "轉維修中", f"原因: {repair_reason} | 廠商: {repair_vendor}")
+                            st.success(f"✅ [{t_name}] 已登記為【維修中】狀態！")
+                            st.rerun()
+                        else:
+                            st.warning("⚠️ 請輸入故障原因或保養項目！")
+                else:
+                    st.info("目前沒有可送修的工具。")
+                    
+            with col_m2:
+                st.subheader("✅ 登記維修完成入庫")
+                if not repairing_df.empty:
+                    tool_repaired = st.selectbox("選擇已修好的工具", repairing_df["工具編號"].astype(str) + " - " + repairing_df["工具名稱"], key="sel_repaired")
+                    repair_note = st.text_input("維修花費金額 / 修復備註 (選填)")
+                    
+                    if st.button("🎉 確認修復完工入庫"):
+                        t_id = tool_repaired.split(" - ")[0]
+                        idx = df_tools[df_tools["工具編號"].astype(str) == t_id].index[0]
+                        t_name = df_tools.loc[idx, "工具名稱"]
+                        
+                        df_tools.loc[idx, "狀態"] = "在庫"
+                        df_tools.loc[idx, "當前借用人"] = "無"
+                        df_tools.loc[idx, "借出日期"] = "無"
+                        
+                        save_data(sheet_tools, df_tools)
+                        add_log_gsheet("維修完成", t_name, "修復完工入庫", f"備註: {repair_note}")
+                        st.success(f"✅ [{t_name}] 已維修完成，重新恢復為【在庫】狀態！")
+                        st.rerun()
+                else:
+                    st.success("🎉 目前沒有正在維修中的工具！")
 
         with tab_te:
             st.subheader("✏️ 修改工具編號、名稱或所屬類別")
@@ -329,7 +390,6 @@ elif page == "🔨 工具資產追蹤":
                         st.success(f"✅ 成功更新工具 [{edit_tool_id}] 資料！")
                         st.rerun()
 
-        # 🆕 刪除/報銷工具品項
         with tab_td:
             st.subheader("🗑️ 報銷/刪除工具資產")
             selected_del_tool = st.selectbox("選擇要報銷刪除的工具", df_tools["工具編號"].astype(str) + " - " + df_tools["工具名稱"], key="del_tool_sel")
@@ -381,8 +441,8 @@ elif page == "📊 數據分析儀表板":
                 st.write("尚無領料數據。")
                 
         with col_chart2:
-            st.subheader("🔨 工具借用頻率佔比")
-            tool_logs = df_logs[df_logs["類型"] == "工具借出"]
+            st.subheader("🔨 工具借用與維修頻率佔比")
+            tool_logs = df_logs[df_logs["類型"].isin(["工具借出", "工具送修"])]
             if not tool_logs.empty:
                 tool_counts = tool_logs["項目名稱"].value_counts()
                 
@@ -391,7 +451,7 @@ elif page == "📊 數據分析儀表板":
                 plt.tight_layout()
                 st.pyplot(fig2)
             else:
-                st.write("尚無工具借出數據。")
+                st.write("尚無工具借出或送修數據。")
 
 # -------------------------------------------------------------------
 # 分頁 4：歷史異動紀錄
