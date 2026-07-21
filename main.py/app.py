@@ -66,7 +66,7 @@ def add_log_gsheet(action_type, item_name, detail, note=""):
         save_data(sheet_logs, df_logs)
 
 def undo_last_log():
-    """撤銷 / 復原最後一筆操作歷史"""
+    """撤銷 / 復原最後一筆操作歷史 (完整支援刪除復原)"""
     df_logs, sheet_logs = load_data("logs")
     if df_logs.empty:
         return False, "目前沒有可撤銷的歷史紀錄！"
@@ -75,6 +75,7 @@ def undo_last_log():
     action_type = last_log["類型"]
     item_name = last_log["項目名稱"]
     detail = str(last_log["變動數量/借用人"])
+    note = str(last_log["備註"])
     
     # 1. 撤銷「領料出庫」或「進貨入庫」
     if action_type in ["領料出庫", "進貨入庫"]:
@@ -91,7 +92,23 @@ def undo_last_log():
                 
             save_data(sheet_mat, df_mat)
 
-    # 2. 撤銷「工具借出」、「工具歸還」或「工具送修」
+    # 2. 撤銷「刪除品項」(自動重新加回材料)
+    elif action_type == "刪除品項":
+        df_mat, sheet_mat = load_data("materials")
+        if item_name not in df_mat["材料名稱"].values:
+            new_id = f"M{len(df_mat) + 1:03d}"
+            new_row = {
+                "材料編號": new_id, 
+                "材料名稱": item_name, 
+                "分類": "未分類", 
+                "目前庫存": 0, 
+                "安全庫存量": 5, 
+                "單位": "個"
+            }
+            df_mat = pd.concat([df_mat, pd.DataFrame([new_row])], ignore_index=True)
+            save_data(sheet_mat, df_mat)
+
+    # 3. 撤銷「工具借出」、「工具歸還」、「工具送修」或「維修完成」
     elif action_type in ["工具借出", "工具歸還", "工具送修", "維修完成"]:
         df_tools, sheet_tools = load_data("tools")
         if not df_tools.empty and item_name in df_tools["工具名稱"].values:
@@ -112,11 +129,27 @@ def undo_last_log():
                 
             save_data(sheet_tools, df_tools)
 
+    # 4. 撤銷「工具報銷刪除」(自動重新加回工具)
+    elif action_type == "工具報銷刪除":
+        df_tools, sheet_tools = load_data("tools")
+        if item_name not in df_tools["工具名稱"].values:
+            new_id = f"T{len(df_tools) + 1:03d}"
+            new_row = {
+                "工具編號": new_id,
+                "工具名稱": item_name,
+                "分類": "未分類",
+                "狀態": "在庫",
+                "當前借用人": "無",
+                "借出日期": "無"
+            }
+            df_tools = pd.concat([df_tools, pd.DataFrame([new_row])], ignore_index=True)
+            save_data(sheet_tools, df_tools)
+
     # 刪除最後一筆 Log 並儲存
     df_logs = df_logs.iloc[:-1].reset_index(drop=True)
     save_data(sheet_logs, df_logs)
     add_log_gsheet("撤銷操作", item_name, "反轉成功", f"原操作: {action_type} ({detail})")
-    return True, f"✅ 已成功撤銷【{action_type} - {item_name}】並將數據反轉復原！"
+    return True, f"✅ 已成功撤銷【{action_type} - {item_name}】並將品項復原！"
 
 # -------------------------------------------------------------------
 # 3. 側邊欄控制與導覽目錄
@@ -505,7 +538,7 @@ elif page == "📊 數據分析儀表板":
                 st.write("尚無工具借出或送修數據。")
 
 # -------------------------------------------------------------------
-# 分頁 4：歷史異動紀錄 (含一鍵撤銷功能)
+# 分頁 4：歷史異動紀錄 (含完整刪除復原功能)
 # -------------------------------------------------------------------
 elif page == "📜 歷史異動紀錄":
     st.header("📜 系統完整流水帳歷程 (Google Sheets 即時同步)")
