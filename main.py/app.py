@@ -391,10 +391,10 @@ elif page == "⚙️ 管理員安全後台":
     st.caption("🔒 本區域為管理員權限，一般師傅與使用者請勿操作。")
     st.markdown("---")
     
-    # 簡單的密碼驗證鎖 (預設密碼: admin123)
+    # 簡單的密碼驗證鎖 (預設密碼: s6674141)
     pwd = st.text_input("🔑 請輸入管理員通行密碼", type="password")
     
-    if pwd == "admin123":
+    if pwd == "s6674141":
         st.success("🔓 管理員驗證成功！")
         st.markdown("---")
         
