@@ -241,14 +241,16 @@ if page == "📦 材料庫存管理":
 
         col_ex1, col_ex2 = st.columns([1, 4])
         with col_ex1:
-            csv_data = df_mat.to_csv(index=False, encoding='utf-8-sig')
+             # 加上 .encode('utf-8-sig') 確保給予檔案正確的字節檔頭 (BOM)
+            csv_data = df_mat.to_csv(index=False).encode('utf-8-sig')
+
             st.download_button(
                 label="📥 匯出完整材料庫存清單 (CSV)",
                 data=csv_data,
                 file_name=f"材料庫存總表_{datetime.now().strftime('%Y%m%d')}.csv",
                 mime="text/csv"
             )
-
+           
         st.subheader("📋 當前材料庫存總覽")
         st.dataframe(df_mat, use_container_width=True)
         
