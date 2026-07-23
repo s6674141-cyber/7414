@@ -437,23 +437,29 @@ elif page == "🔨 工具借還與報修":
 # -------------------------------------------------------------------
 # 分頁 C：📊 BI 經營決策儀表板 (管理員專屬)
 # -------------------------------------------------------------------
+# -------------------------------------------------------------------
+# 分頁 C：📊 BI 經營決策儀表板 (5大商業智慧圖表完整合體版)
+# -------------------------------------------------------------------
 elif page == "📊 BI 經營決策儀表板" and st.session_state.is_admin:
     st.title("📊 BI 商業智慧經營決策中心")
-    st.caption("即時比較工程案預算與實際材料金流支出，防範超支與材料異常動向")
+    st.caption("結合專案財務、材料金流、設備損耗與調度效率之高階決策矩陣")
     st.markdown("---")
     
     df_logs, _ = load_data("logs")
     df_mat, _ = load_data("materials")
     df_proj, _ = load_data("projects")
+    df_tools, _ = load_data("tools")
     
-    if not df_proj.empty and not df_mat.empty and not df_logs.empty:
+    if not df_logs.empty:
         # 1. 整理單價數據
         if "單價" not in df_mat.columns: df_mat["單價"] = 0
         df_mat["單價"] = pd.to_numeric(df_mat["單價"], errors='coerce').fillna(0)
         price_dict = dict(zip(df_mat["材料名稱"].astype(str), df_mat["單價"]))
         
-        # 2. 解析領料日誌，計算每個工程案的實際消耗金額
+        # 2. 解析領料日誌
         usage_logs = df_logs[df_logs["類型"] == "領料出庫"].copy()
+        repair_logs = df_logs[df_logs["類型"] == "工具送修"].copy()
+        borrow_logs = df_logs[df_logs["類型"] == "工具借出"].copy()
         
         def calculate_log_cost(row):
             item_name = str(row["項目名稱"])
@@ -461,7 +467,7 @@ elif page == "📊 BI 經營決策儀表板" and st.session_state.is_admin:
             numbers = re.findall(r'\d+', detail)
             qty = int(numbers[0]) if numbers else 0
             unit_price = price_dict.get(item_name, 0)
-            return qty * unit_price
+            return qty, unit_price, qty * unit_price
 
         def extract_proj_name(note):
             note_str = str(note)
@@ -469,79 +475,182 @@ elif page == "📊 BI 經營決策儀表板" and st.session_state.is_admin:
                 return note_str.split("-")[0].replace("領用人/工程:", "").strip()
             return "未分類工程"
 
-        usage_logs["消耗金額"] = usage_logs.apply(calculate_log_cost, axis=1)
-        usage_logs["工程案名稱"] = usage_logs["備註"].apply(extract_proj_name)
+        if not usage_logs.empty:
+            res = usage_logs.apply(calculate_log_cost, axis=1)
+            usage_logs["數量"] = [r[0] for r in res]
+            usage_logs["單價"] = [r[1] for r in res]
+            usage_logs["消耗金額"] = [r[2] for r in res]
+            usage_logs["工程案名稱"] = usage_logs["備註"].apply(extract_proj_name)
+        else:
+            usage_logs["數量"] = 0
+            usage_logs["單價"] = 0
+            usage_logs["消耗金額"] = 0
+            usage_logs["工程案名稱"] = "無"
+
+        # ---------------------------------------------------------------
+        # 0. 頂部 KPI 數據總覽卡片
+        # ---------------------------------------------------------------
+        total_spent = usage_logs["消耗金額"].sum() if not usage_logs.empty else 0
+        repair_count = len(repair_logs)
+        borrow_count = len(borrow_logs)
         
-        # 彙整各工程案實際花費
-        cost_summary = usage_logs.groupby("工程案名稱")["消耗金額"].sum().reset_index()
-        
-        # 3. 與工程案預算表 (projects) 合併
-        df_proj["材料總預算"] = pd.to_numeric(df_proj["材料總預算"], errors='coerce').fillna(0)
-        merged_proj = pd.merge(df_proj, cost_summary, on="工程案名稱", how="left")
-        merged_proj["消耗金額"] = merged_proj["消耗金額"].fillna(0)
-        merged_proj["預算使用率 (%)"] = (merged_proj["消耗金額"] / merged_proj["材料總預算"] * 100).round(1).fillna(0)
-        
-        # 📊 BI 指標 Top 卡片
-        total_budget = merged_proj["材料總預算"].sum()
-        total_spent = merged_proj["消耗金額"].sum()
-        
-        c1, c2, c3 = st.columns(3)
-        c1.metric("🏗️ 全案材料總預算", f"${total_budget:,.0f} 元")
-        c2.metric("💸 全案實際材料消耗", f"${total_spent:,.0f} 元")
-        c3.metric("📊 整體預算消化率", f"{(total_spent/total_budget*100 if total_budget>0 else 0):.1f}%")
+        k1, k2, k3, k4 = st.columns(4)
+        k1.metric("💸 全案材料累積總支出", f"${total_spent:,.0f} 元")
+        k2.metric("📦 累積領料總次數", f"{len(usage_logs)} 次")
+        k3.metric("🔨 工具調度次數", f"{borrow_count} 次")
+        k4.metric("🚨 設備送修件數", f"{repair_count} 件", delta_color="inverse")
         
         st.markdown("<br>", unsafe_allow_html=True)
+        
+        # ---------------------------------------------------------------
+        # 【圖表 1】專案材料預算 vs 實際消耗金額 (Budget vs. Actual Cost)
+        # ---------------------------------------------------------------
         st.markdown("##### 📈 【圖表 1】專案材料預算 vs 實際消耗金額 (Budget vs. Actual Cost)")
         
-        # 繪製 Plotly 雙柱圖
-        fig = go.Figure()
-        fig.add_trace(go.Bar(
-            y=merged_proj["工程案名稱"],
-            x=merged_proj["材料總預算"],
-            name="材料總預算 (元)",
-            orientation='h',
-            marker_color='#93C5FD',
-            text=[f"${x:,.0f}" for x in merged_proj["材料總預算"]],
-            textposition='outside'
-        ))
-        fig.add_trace(go.Bar(
-            y=merged_proj["工程案名稱"],
-            x=merged_proj["消耗金額"],
-            name="實際消耗金額 (元)",
-            orientation='h',
-            marker_color='#1D4ED8',
-            text=[f"${x:,.0f}" for x in merged_proj["消耗金額"]],
-            textposition='outside'
-        ))
-        fig.update_layout(
-            barmode='group',
-            height=380,
-            margin=dict(l=10, r=40, t=10, b=10),
-            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
-            paper_bgcolor='rgba(0,0,0,0)',
-            plot_bgcolor='rgba(0,0,0,0)'
-        )
-        st.plotly_chart(fig, use_container_width=True)
+        if not df_proj.empty:
+            df_proj["材料總預算"] = pd.to_numeric(df_proj["材料總預算"], errors='coerce').fillna(0)
+            cost_summary = usage_logs.groupby("工程案名稱")["消耗金額"].sum().reset_index() if not usage_logs.empty else pd.DataFrame(columns=["工程案名稱", "消耗金額"])
+            
+            merged_proj = pd.merge(df_proj, cost_summary, on="工程案名稱", how="left")
+            merged_proj["消耗金額"] = merged_proj["消耗金額"].fillna(0)
+            merged_proj["預算使用率 (%)"] = (merged_proj["消耗金額"] / merged_proj["材料總預算"] * 100).round(1).fillna(0)
+            
+            fig1 = go.Figure()
+            fig1.add_trace(go.Bar(
+                y=merged_proj["工程案名稱"], x=merged_proj["材料總預算"],
+                name="材料總預算 (元)", orientation='h', marker_color='#93C5FD',
+                text=[f"${x:,.0f}" for x in merged_proj["材料總預算"]], textposition='outside'
+            ))
+            fig1.add_trace(go.Bar(
+                y=merged_proj["工程案名稱"], x=merged_proj["消耗金額"],
+                name="實際消耗金額 (元)", orientation='h', marker_color='#1D4ED8',
+                text=[f"${x:,.0f}" for x in merged_proj["消耗金額"]], textposition='outside'
+            ))
+            fig1.update_layout(
+                barmode='group', height=350, margin=dict(l=10, r=40, t=10, b=10),
+                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+                paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)'
+            )
+            st.plotly_chart(fig1, use_container_width=True)
+            
+            # BI 智慧決策建議
+            over_budget = merged_proj[merged_proj["消耗金額"] > merged_proj["材料總預算"]]
+            warning_budget = merged_proj[(merged_proj["預算使用率 (%)"] >= 80) & (merged_proj["消耗金額"] <= merged_proj["材料總預算"])]
+            
+            if not over_budget.empty:
+                for _, row in over_budget.iterrows():
+                    st.error(f"🚨 **預算超支警報**：【{row['工程案名稱']}】材料已超出預算 **${row['消耗金額'] - row['材料總預算']:,.0f} 元** (使用率 {row['預算使用率 (%)']}%)！建議 PM 查核是否有材料偷挪用或漏報追加工程。")
+            if not warning_budget.empty:
+                for _, row in warning_budget.iterrows():
+                    st.warning(f"⚠️ **預算高風險預警**：【{row['工程案名稱']}】預算已消化 **{row['預算使用率 (%)']}%**！請 PM 查核剩餘工期進度。")
+            if over_budget.empty and warning_budget.empty:
+                st.success("🎉 當前所有進行中工程專案之材料預算均控管良好！")
+        else:
+            st.info("💡 請先至【🏗️ 工程案預算管理】建檔工程案以啟用預算分析。")
+
+        st.markdown("---")
         
-        # 💡 BI 智慧自動決策建議
-        st.markdown("##### 💡 智慧營運與財務決策建議")
-        over_budget = merged_proj[merged_proj["消耗金額"] > merged_proj["材料總預算"]]
-        warning_budget = merged_proj[(merged_proj["預算使用率 (%)"] >= 80) & (merged_proj["消耗金額"] <= merged_proj["材料總預算"])]
+        # ---------------------------------------------------------------
+        # 【圖表 2 & 3】高價值材料消耗排行 vs 高頻損壞設備警報
+        # ---------------------------------------------------------------
+        col_m1, col_m2 = st.columns(2)
         
-        if not over_budget.empty:
-            for _, row in over_budget.iterrows():
-                over_amount = row['消耗金額'] - row['材料總預算']
-                st.error(f"🚨 **預算超支警報**：【{row['工程案名稱']}】材料已超出預算 **${over_amount:,.0f} 元** (使用率 {row['預算使用率 (%)']}%)！建議 PM 查核是否有材料偷挪用或漏報追加工程。")
-        
-        if not warning_budget.empty:
-            for _, row in warning_budget.iterrows():
-                st.warning(f"⚠️ **預算高風險預警**：【{row['工程案名稱']}】預算已消化 **{row['預算使用率 (%)']}%**！請 PM 查核剩餘工期進度，避免施工後期斷料。")
+        with col_m1:
+            st.markdown("##### 💎 【圖表 2】高價值材料 (A類資產) 消耗總金額排行榜")
+            if not usage_logs.empty:
+                mat_cost_df = usage_logs.groupby("項目名稱")["消耗金額"].sum().reset_index()
+                mat_cost_df = mat_cost_df.sort_values(by="消耗金額", ascending=False).head(5)
                 
-        if over_budget.empty and warning_budget.empty:
-            st.success("🎉 當前所有進行中工程專案之材料預算均控管良好，無超支風險！")
+                fig2 = px.bar(
+                    mat_cost_df, x="消耗金額", y="項目名稱", orientation='h',
+                    text=[f"${x:,.0f}" for x in mat_cost_df["消耗金額"]],
+                    color="消耗金額", color_continuous_scale="Teal"
+                )
+                fig2.update_traces(textposition='outside')
+                fig2.update_layout(yaxis={'categoryorder':'total ascending', 'title':''}, coloraxis_showscale=False, height=320, margin=dict(l=10, r=40, t=10, b=10))
+                st.plotly_chart(fig2, use_container_width=True)
+                
+                top_mat = mat_cost_df.iloc[0]["項目名稱"] if not mat_cost_df.empty else ""
+                top_val = mat_cost_df.iloc[0]["消耗金額"] if not mat_cost_df.empty else 0
+                st.info(f"💡 **ABC 採購建議**：【{top_mat}】為金流消耗最高之材料（已消耗 ${top_val:,.0f} 元）。建議採用 JIT 及時採購，避免囤積資金。")
+            else:
+                st.info("尚無材料領用金額數據。")
+
+        with col_m2:
+            st.markdown("##### 🚨 【圖表 3】高頻損壞 / 設備報修警報 (TCO 分析)")
+            if not repair_logs.empty:
+                repair_df = repair_logs["項目名稱"].value_counts().reset_index()
+                repair_df.columns = ["工具名稱", "送修次數"]
+                
+                fig3 = px.bar(
+                    repair_df, x="送修次數", y="工具名稱", orientation='h',
+                    text="送修次數", color="送修次數", color_continuous_scale="Reds"
+                )
+                fig3.update_traces(textposition='outside')
+                fig3.update_layout(yaxis={'categoryorder':'total ascending', 'title':''}, coloraxis_showscale=False, height=320, margin=dict(l=10, r=30, t=10, b=10))
+                st.plotly_chart(fig3, use_container_width=True)
+                
+                worst_tool = repair_df.iloc[0]["工具名稱"] if not repair_df.empty else ""
+                worst_count = repair_df.iloc[0]["送修次數"] if not repair_df.empty else 0
+                if worst_count >= 3:
+                    st.error(f"💡 **修不如買建議**：【{worst_tool}】累積送修已達 {worst_count} 次，維修成本過高。建議直接辦理**資產報廢**並購買新機。")
+                else:
+                    st.warning(f"💡 **維修建議**：【{worst_tool}】故障頻率偏高，請安排原廠檢測。")
+            else:
+                st.success("🎉 目前設備狀況良好，無任何故障送修紀錄！")
+
+        st.markdown("---")
+        
+        # ---------------------------------------------------------------
+        # 【圖表 4 & 5】領料金額每日動態趨勢 vs 工具外借滯留警報
+        # ---------------------------------------------------------------
+        col_m3, col_m4 = st.columns(2)
+        
+        with col_m3:
+            st.markdown("##### 📈 【圖表 4】每日領料金額動態與資金消耗趨勢")
+            if not usage_logs.empty and "時間" in usage_logs.columns:
+                try:
+                    usage_logs_copy = usage_logs.copy()
+                    usage_logs_copy["日期"] = pd.to_datetime(usage_logs_copy["時間"]).dt.date
+                    trend_df = usage_logs_copy.groupby("日期")["消耗金額"].sum().reset_index()
+                    
+                    fig4 = px.line(trend_df, x="日期", y="消耗金額", markers=True, line_shape="spline")
+                    fig4.update_traces(line_color="#2563EB", line_width=3)
+                    fig4.update_layout(height=300, margin=dict(l=10, r=20, t=10, b=10), xaxis_title="", yaxis_title="每日消耗金額 (元)")
+                    st.plotly_chart(fig4, use_container_width=True)
+                    
+                    st.caption("💡 **資金流洞察**：監控每日資金消耗峰值，可協助財務預先安排專案材料款項。")
+                except:
+                    st.info("時間解析中。")
+            else:
+                st.info("尚無時間序列數據。")
+
+        with col_m4:
+            st.markdown("##### ⏳ 【圖表 5】外借工具超期滯留警報 (> 7 天未歸還)")
+            if not df_tools.empty:
+                borrowed_tools = df_tools[df_tools["狀態"] == "借出"].copy()
+                if not borrowed_tools.empty and "借出日期" in borrowed_tools.columns:
+                    today = pd.to_datetime("today").date()
+                    borrowed_tools["借出天數"] = borrowed_tools["借出日期"].apply(
+                        lambda x: (today - pd.to_datetime(x).date()).days if str(x) != "無" and pd.notnull(x) else 0
+                    )
+                    overdue_tools = borrowed_tools[borrowed_tools["借出天數"] >= 7]
+                    
+                    if not overdue_tools.empty:
+                        st.dataframe(
+                            overdue_tools[["工具編號", "工具名稱", "當前借用人", "借出日期", "借出天數"]],
+                            use_container_width=True
+                        )
+                        st.warning("💡 **調度建議**：以上工具外借已超過 7 天，請發送催還通知，避免機具閒置或重複購買。")
+                    else:
+                        st.success("🎉 所有外借工具均在正常 7 天借期內！")
+                else:
+                    st.info("目前沒有外借中的工具。")
+            else:
+                st.info("無工具資料。")
 
     else:
-        st.info("💡 請先至【🏗️ 工程案預算管理】建檔工程案，並確認材料表中有設定【單價】，即可展現完整 BI 圖表！")
+        st.info("目前雲端流水帳尚無異動紀錄，請執行領料或借還操作後查看。")
 
 # -------------------------------------------------------------------
 # 分頁 D：🏗️ 工程案預算管理 (管理員專屬)
