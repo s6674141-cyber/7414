@@ -624,29 +624,31 @@ elif page == "🔨 工具資產追蹤":
 # -------------------------------------------------------------------
 # 分頁 3：📤 CSV 批次匯入（獨立核心功能頁面）
 # -------------------------------------------------------------------
+# -------------------------------------------------------------------
+# 分頁 3：📤 CSV 批次匯入（支援 材料 / 工具 / 歷史紀錄）
+# -------------------------------------------------------------------
 elif page == "📤 CSV 批次匯入":
     st.header("📤 CSV 資料批次匯入中心")
-    st.caption("您可以透過上傳 CSV 檔案，一次性將大量【材料庫存】或【工具資產】同步寫入 Google Sheets 雲端資料庫。")
+    st.caption("您可以透過上傳 CSV 檔案，一次性將大量【材料庫存】、【工具資產】或【歷史操作紀錄】寫入 Google Sheets。")
     st.markdown("---")
     
     # 步驟 1：選擇目標類別
     target_type = st.radio(
         "📌 第一步：請選擇您要匯入的資料種類：",
-        ["📦 材料耗材 (materials)", "🔨 工具資產 (tools)"],
+        ["📦 材料耗材 (materials)", "🔨 工具資產 (tools)", "📜 歷史紀錄 (logs)"],
         horizontal=True
     )
     
     # 說明必填欄位格式
-    with st.expander("ℹ️ 點擊查看 CSV 欄位格式建議說明"):
+    with st.expander("ℹ️ 點擊查看各類別 CSV 欄位格式說明"):
         if "材料" in target_type:
-            st.markdown("""
-            * **必須包含的欄位**：`材料名稱`、`分類`、`目前庫存`、`安全庫存量`、`單位`
-            * **可選欄位**：`材料編號`（若無將自動生成，如 M001）、`規格/尺寸`（若無預設為 '無'）
-            """)
+            st.markdown("* **必須欄位**：`材料名稱`、`分類`、`目前庫存`、`安全庫存量`、`單位`")
+        elif "工具" in target_type:
+            st.markdown("* **必須欄位**：`工具名稱`、`分類`")
         else:
             st.markdown("""
-            * **必須包含的欄位**：`工具名稱`、`分類`
-            * **可選欄位**：`工具編號`（若無自動生成）、`品牌/廠牌`、`型號`、`狀態`（預設為 '在庫'）、`當前借用人`（預設 '無'）、`借出日期`（預設 '無'）
+            * **必須欄位**：`時間`、`類型`、`項目名稱`、`變動數量/借用人`、`備註`
+            * **類型建議值**：`領料出庫`、`進貨入庫`、`工具借出`、`工具歸還`、`工具送修`（有這些類型儀表板才能精準統計！）
             """)
             
     st.markdown("---")
@@ -656,7 +658,8 @@ elif page == "📤 CSV 批次匯入":
     
     if uploaded_file is not None:
         try:
-            import_df = pd.read_csv(uploaded_file)
+            # 使用 utf-8-sig 防止讀取亂碼
+            import_df = pd.read_csv(uploaded_file, encoding='utf-8-sig')
             st.subheader("📋 預覽檔案內容 (前 10 筆)")
             st.dataframe(import_df.head(10), use_container_width=True)
             
@@ -675,11 +678,9 @@ elif page == "📤 CSV 批次匯入":
                     missing_cols = [c for c in required_cols if c not in import_df.columns]
                     
                     if missing_cols:
-                        st.error(f"❌ 上傳失敗！CSV 檔案缺少以下必填欄位：{missing_cols}")
+                        st.error(f"❌ 上傳失敗！CSV 缺少以下必填欄位：{missing_cols}")
                     else:
-                        if "規格/尺寸" not in import_df.columns:
-                            import_df["規格/尺寸"] = "無"
-                            
+                        if "規格/尺寸" not in import_df.columns: import_df["規格/尺寸"] = "無"
                         if "完全覆蓋" in import_mode:
                             if "材料編號" not in import_df.columns:
                                 import_df["材料編號"] = [f"M{i+1:03d}" for i in range(len(import_df))]
@@ -692,21 +693,18 @@ elif page == "📤 CSV 批次匯入":
                         
                         cols_order = ["材料編號", "材料名稱", "規格/尺寸", "分類", "目前庫存", "安全庫存量", "單位"]
                         final_df = final_df[cols_order]
-                        
                         save_data(sheet_mat, final_df)
-                        add_log_gsheet("批次匯入", uploaded_file.name, f"匯入 {len(import_df)} 筆材料", f"模式: {import_mode}")
-                        st.success(f"🎉 成功匯入 {len(import_df)} 筆材料資料至 Google Sheets！請點擊側邊欄【📦 材料庫存管理】查看！")
+                        st.success(f"🎉 成功匯入 {len(import_df)} 筆材料資料！")
 
                 # --- B. 匯入工具邏輯 ---
-                else:
+                elif "工具" in target_type:
                     df_tools, sheet_tools = load_data("tools")
                     required_cols = ["工具名稱", "分類"]
                     missing_cols = [c for c in required_cols if c not in import_df.columns]
                     
                     if missing_cols:
-                        st.error(f"❌ 上傳失敗！CSV 檔案缺少以下必填欄位：{missing_cols}")
+                        st.error(f"❌ 上傳失敗！CSV 缺少以下必填欄位：{missing_cols}")
                     else:
-                        # 自動補齊工具預設欄位
                         if "品牌/廠牌" not in import_df.columns: import_df["品牌/廠牌"] = "無"
                         if "型號" not in import_df.columns: import_df["型號"] = "無"
                         if "狀態" not in import_df.columns: import_df["狀態"] = "在庫"
@@ -725,13 +723,29 @@ elif page == "📤 CSV 批次匯入":
                             
                         cols_order = ["工具編號", "工具名稱", "品牌/廠牌", "型號", "分類", "狀態", "當前借用人", "借出日期"]
                         final_df = final_df[cols_order]
-                        
                         save_data(sheet_tools, final_df)
-                        add_log_gsheet("批次匯入工具", uploaded_file.name, f"匯入 {len(import_df)} 件工具", f"模式: {import_mode}")
-                        st.success(f"🎉 成功匯入 {len(import_df)} 件工具資產至 Google Sheets！請點擊側邊欄【🔨 工具資產追蹤】查看！")
+                        st.success(f"🎉 成功匯入 {len(import_df)} 件工具資產！")
+
+                # --- C. 匯入歷史紀錄 (logs) 邏輯 ---
+                else:
+                    df_logs, sheet_logs = load_data("logs")
+                    required_cols = ["時間", "類型", "項目名稱", "變動數量/借用人", "備註"]
+                    missing_cols = [c for c in required_cols if c not in import_df.columns]
+                    
+                    if missing_cols:
+                        st.error(f"❌ 上傳失敗！CSV 缺少以下必填欄位：{missing_cols}")
+                    else:
+                        if "完全覆蓋" in import_mode:
+                            final_df = import_df
+                        else:
+                            final_df = pd.concat([df_logs, import_df], ignore_index=True)
+                            
+                        final_df = final_df[required_cols]
+                        save_data(sheet_logs, final_df)
+                        st.success(f"🎉 成功匯入 {len(import_df)} 筆歷史紀錄！請點選側邊欄【📊 數據分析儀表板】查看測試圖表！")
                         
         except Exception as e:
-            st.error(f"❌ 讀取 CSV 檔案失敗，請確認檔案是否為標準 CSV 格式及 UTF-8 編碼！錯誤資訊：{e}")
+            st.error(f"❌ 讀取 CSV 檔案失敗，請確認檔案格式及 UTF-8 編碼！錯誤資訊：{e}")
 
 # -------------------------------------------------------------------
 # 分頁 4：數據分析儀表板
