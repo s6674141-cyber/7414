@@ -229,16 +229,19 @@ if page == "📦 材料庫存管理":
         
         st.markdown("---")
         
+        # 1. 警報區域
         if not low_stock_df.empty:
             st.error("⚠️ **【安全庫存警報】以下材料庫存已低於警戒線，請及時補貨！**")
             st.dataframe(low_stock_df[["材料編號", "材料名稱", "分類", "目前庫存", "安全庫存量", "單位"]], use_container_width=True)
-            
-            # 一鍵匯出採購建議 CSV
-            csv_data = low_stock_df[["材料編號", "材料名稱", "分類", "目前庫存", "安全庫存量", "單位"]].to_csv(index=False, encoding='utf-8-sig')
+
+        # 2. 永遠顯示的匯出按鈕（不受庫存影響）
+        col_ex1, col_ex2 = st.columns([1, 4])
+        with col_ex1:
+            csv_data = df_mat.to_csv(index=False, encoding='utf-8-sig')
             st.download_button(
-                label="📥 匯出低庫存採購清單 (CSV)",
+                label="📥 匯出完整庫存清單 (CSV)",
                 data=csv_data,
-                file_name=f"採購建議清單_{datetime.now().strftime('%Y%m%d')}.csv",
+                file_name=f"材料庫存總表_{datetime.now().strftime('%Y%m%d')}.csv",
                 mime="text/csv"
             )
 
@@ -248,7 +251,16 @@ if page == "📦 材料庫存管理":
         st.markdown("---")
         
         st.subheader("🔄 庫存異動與資料編輯面板")
-        tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(["📤 師傅領料登記", "📥 進貨入庫登記", "➕ 新增材料品項", "✏️ 修改/編輯材料資料", "🗑️ 刪除材料品項", "📤 批次匯入 CSV"])
+        
+        # 3. 強制載入 6 個頁籤 (包含 📤 批次匯入 CSV)
+        tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
+            "📤 師傅領料登記", 
+            "📥 進貨入庫登記", 
+            "➕ 新增材料品項", 
+            "✏️ 修改/編輯材料資料", 
+            "🗑️ 刪除材料品項", 
+            "📤 批次匯入 CSV"
+        ])
         
         with tab1:
             with st.form("borrow_material_form"):
@@ -380,6 +392,7 @@ if page == "📦 材料庫存管理":
                     else:
                         st.error("❌ 請先勾選上方「我確定要刪除...」核取方塊！")
 
+        # 4. 批次匯入 CSV 功能（獨立為第 6 個頁籤）
         with tab6:
             st.subheader("📤 批次匯入材料 CSV 檔案")
             st.caption("請上傳符合格式的 CSV 檔案，將自動追加或覆蓋至雲端資料庫。")
