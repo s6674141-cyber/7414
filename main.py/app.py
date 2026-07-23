@@ -750,43 +750,86 @@ elif page == "📤 CSV 批次匯入":
 # -------------------------------------------------------------------
 # 分頁 4：數據分析儀表板
 # -------------------------------------------------------------------
+# -------------------------------------------------------------------
+# 分頁 4：數據分析儀表板 (實務決策導向 + Plotly 無亂碼)
+# -------------------------------------------------------------------
 elif page == "📊 數據分析儀表板":
-    st.header("📊 後台數據分析與決策儀表板")
+    import plotly.express as px
+    import re
+    
+    st.header("📊 後台數據分析與經營決策儀表板")
+    st.caption("💡 透過歷史數據分析工程耗材成本與工具維修頻率，協助管理者優化採購與資產調度。")
+    st.markdown("---")
     
     df_logs, _ = load_data("logs")
     
     if df_logs.empty:
         st.info("目前尚無足夠的歷史流水帳數據可供分析，請先執行幾筆領料或借還操作！")
     else:
+        # 指標卡片區 (KPI Cards)
+        usage_logs = df_logs[df_logs["類型"] == "領料出庫"]
+        repair_logs = df_logs[df_logs["類型"] == "工具送修"]
+        borrow_logs = df_logs[df_logs["類型"] == "工具借出"]
+        
+        kpi1, kpi2, kpi3 = st.columns(3)
+        kpi1.metric("累積領料次數", f"{len(usage_logs)} 次")
+        kpi2.metric("累積工具借出", f"{len(borrow_logs)} 次")
+        kpi3.metric("⚠️ 工具報修人次", f"{len(repair_logs)} 次", delta_color="inverse")
+        
+        st.markdown("---")
+        
         col_chart1, col_chart2 = st.columns(2)
         
+        # 📊 圖表 1：各工程專案消耗材料分析
         with col_chart1:
-            st.subheader("🔥 熱門耗材領料排行榜")
-            usage_logs = df_logs[df_logs["類型"] == "領料出庫"]
+            st.subheader("🏗️ 各工程專案耗材領用頻率")
             if not usage_logs.empty:
-                mat_counts = usage_logs["項目名稱"].value_counts()
+                # 自動從「備註」欄位擷取工程案名稱 (例如: C區地下室管線維護 - 許文彬 領用 -> 擷取 C區地下室管線維護)
+                def extract_project(note):
+                    note_str = str(note)
+                    if "-" in note_str:
+                        return note_str.split("-")[0].strip()
+                    return "未分類工程"
                 
-                fig, ax = plt.subplots(figsize=(6, 4))
-                ax.barh(mat_counts.index, mat_counts.values, color='#3498db', edgecolor='black')
-                ax.set_xlabel("領用次數 (Times)")
-                ax.invert_yaxis()
-                plt.tight_layout()
-                st.pyplot(fig)
+                usage_logs_copy = usage_logs.copy()
+                usage_logs_copy["工程案"] = usage_logs_copy["備註"].apply(extract_project)
+                proj_counts = usage_logs_copy["工程案"].value_counts().reset_index()
+                proj_counts.columns = ["工程案名稱", "領用次數"]
+                
+                fig1 = px.bar(
+                    proj_counts,
+                    x="領用次數",
+                    y="工程案名稱",
+                    orientation='h',
+                    text="領用次數",
+                    color="領用次數",
+                    color_continuous_scale="Teal"
+                )
+                fig1.update_layout(yaxis={'categoryorder':'total ascending'}, showlegend=False, margin=dict(l=20, r=20, t=30, b=20))
+                st.plotly_chart(fig1, use_container_width=True)
             else:
-                st.write("尚無領料數據。")
+                st.write("尚無專案領料數據。")
                 
+        # 📊 圖表 2：高頻損壞 / 待淘汰工具警報
         with col_chart2:
-            st.subheader("🔨 工具借用與維修頻率佔比")
-            tool_logs = df_logs[df_logs["類型"].isin(["工具借出", "工具送修"])]
-            if not tool_logs.empty:
-                tool_counts = tool_logs["項目名稱"].value_counts()
+            st.subheader("🚨 高頻損壞 / 送修工具警報")
+            if not repair_logs.empty:
+                repair_counts = repair_logs["項目名稱"].value_counts().reset_index()
+                repair_counts.columns = ["工具名稱", "維修次數"]
                 
-                fig2, ax2 = plt.subplots(figsize=(6, 4))
-                ax2.pie(tool_counts.values, labels=tool_counts.index, autopct='%1.1f%%', startangle=140, colors=['#e74c3c', '#f1c40f', '#2ecc71', '#9b59b6'])
-                plt.tight_layout()
-                st.pyplot(fig2)
+                fig2 = px.bar(
+                    repair_counts,
+                    x="工具名稱",
+                    y="維修次數",
+                    text="維修次數",
+                    color="維修次數",
+                    color_continuous_scale="Reds"
+                )
+                fig2.update_layout(showlegend=False, margin=dict(l=20, r=20, t=30, b=20))
+                st.plotly_chart(fig2, use_container_width=True)
+                st.caption("⚠️ 提示：若單一工具送修次數過高，建議評估報銷並購買全新品。")
             else:
-                st.write("尚無工具借出或送修數據。")
+                st.success("🎉 目前沒有任何工具的送修紀錄，資產狀況良好！")
 
 # -------------------------------------------------------------------
 # 分頁 5：歷史異動紀錄
