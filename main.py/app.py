@@ -13,60 +13,52 @@ plt.rcParams['font.sans-serif'] = ['Microsoft JhengHei', 'PingFang TC', 'Arial U
 plt.rcParams['axes.unicode_minus'] = False
 
 st.set_page_config(
-    page_title="ProStock 水電雲端資產管理系統",
+    page_title="ProStock 雲端倉管系統",
     page_icon="⚡",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
 # -------------------------------------------------------------------
-# 🎨 高級 UI / CSS 自訂注入（打造 SaaS 商業軟體質感）
+# 🎨 UI / CSS 自訂注入（修正左側欄文字高對比度 + 清晰度）
 # -------------------------------------------------------------------
 custom_css = """
     <style>
-    /* Google Fonts 載入現代無襯線字型 Inter */
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
 
     html, body, [class*="css"]  {
         font-family: 'Inter', 'Microsoft JhengHei', sans-serif;
     }
 
-    /* 主背景色簡約灰 */
     .stApp {
         background-color: #F8F9FA;
     }
 
-    /* 隱藏預設 Streamlit 頂欄與頁尾 */
     .stAppToolbar, [data-testid="stToolbar"] { display: none !important; }
     #MainMenu, header, footer { visibility: hidden !important; display: none !important; }
 
-    /* 側邊欄樣式優化 */
+    /* 💡 修復左側欄文字看不清：改為高對比亮色 (#FFFFFF 與 #E2E8F0) */
     section[data-testid="stSidebar"] {
-        background-color: #1E293B !important; /* 深藍灰極致專業感 */
-        color: #F8FAFC;
+        background-color: #1E293B !important;
     }
-    section[data-testid="stSidebar"] .stMarkdown, 
-    section[data-testid="stSidebar"] label, 
-    section[data-testid="stSidebar"] .stCaption {
-        color: #94A3B8 !important;
-    }
-    section[data-testid="stSidebar"] h1 {
+    section[data-testid="stSidebar"] .stMarkdown p,
+    section[data-testid="stSidebar"] label,
+    section[data-testid="stSidebar"] span,
+    section[data-testid="stSidebar"] div {
         color: #F8FAFC !important;
-        font-weight: 700;
-        font-size: 1.35rem;
+        font-weight: 500 !important;
+    }
+    section[data-testid="stSidebar"] .stCaption {
+        color: #CBD5E1 !important;
+    }
+    section[data-testid="stSidebar"] h1, 
+    section[data-testid="stSidebar"] h2, 
+    section[data-testid="stSidebar"] h3 {
+        color: #FFFFFF !important;
+        font-weight: 700 !important;
     }
 
-    /* 自訂卡片容器 (Card) 視覺效果 */
-    div.stCard {
-        background-color: #FFFFFF;
-        border-radius: 12px;
-        padding: 24px;
-        box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05), 0 1px 2px 0 rgba(0, 0, 0, 0.03);
-        border: 1px solid #E2E8F0;
-        margin-bottom: 20px;
-    }
-
-    /* 按鈕美化 (Primary & Secondary) */
+    /* 自訂卡片容器與按鈕視覺 */
     .stButton>button {
         border-radius: 8px !important;
         font-weight: 600 !important;
@@ -78,49 +70,24 @@ custom_css = """
         color: white !important;
         box-shadow: 0 2px 4px rgba(37, 99, 235, 0.2) !important;
     }
-    .stButton>button[kind="primary"]:hover {
-        background: linear-gradient(135deg, #1D4ED8 0%, #1E40AF 100%) !important;
-        transform: translateY(-1px);
-        box-shadow: 0 4px 6px rgba(37, 99, 235, 0.3) !important;
-    }
 
     /* 頁籤 (Tabs) 優化 */
     .stTabs [data-baseweb="tab-list"] {
         gap: 8px;
-        background-color: #F1F5F9;
+        background-color: #E2E8F0;
         padding: 6px;
         border-radius: 10px;
-    }
-    .stTabs [data-baseweb="tab"] {
-        height: 40px;
-        white-space: pre;
-        border-radius: 6px;
-        color: #64748B;
-        font-weight: 500;
     }
     .stTabs [aria-selected="true"] {
         background-color: #FFFFFF !important;
         color: #0F172A !important;
         font-weight: 600;
-        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
     }
 
-    /* Metric 卡片美化 */
-    [data-testid="stMetricValue"] {
-        font-size: 1.8rem !important;
-        font-weight: 700 !important;
-        color: #0F172A !important;
-    }
-    [data-testid="stMetricLabel"] {
-        color: #64748B !important;
-        font-weight: 500 !important;
-    }
-
-    /* Dataframe 美化邊框 */
+    /* Dataframe 美化 */
     [data-testid="stDataFrame"] {
         border: 1px solid #E2E8F0;
         border-radius: 8px;
-        overflow: hidden;
     }
     </style>
 """
@@ -211,9 +178,8 @@ def undo_last_log():
 if "is_admin" not in st.session_state:
     st.session_state.is_admin = False
 
-# Sidebar 品牌頂欄 Header
 st.sidebar.markdown("### ⚡ ProStock 雲端倉管")
-st.sidebar.caption("v2.4 Enterprise Edition")
+st.sidebar.caption("v2.5 Enterprise Edition")
 st.sidebar.markdown("---")
 
 role = st.sidebar.radio("👤 使用者權限切換：", ["👷 現場作業員 (師傅)", "🔑 系統管理員"])
@@ -265,7 +231,21 @@ if page == "📦 材料領用與進貨":
         df_mat["安全庫存量"] = pd.to_numeric(df_mat["安全庫存量"], errors='coerce').fillna(0).astype(int)
         
         st.subheader("📋 即時材料庫存狀態")
-        st.dataframe(df_mat[["材料編號", "材料名稱", "規格/尺寸", "分類", "目前庫存", "單位"]], use_container_width=True)
+        
+        # 🔍 材料快速搜尋功能
+        search_mat = st.text_input("🔍 快速搜尋材料 (輸入名稱、材料編號、規格或分類)：", placeholder="例如: 電線, M001, 2.0mm, 管路類...")
+        
+        filtered_mat = df_mat.copy()
+        if search_mat:
+            search_term = search_mat.strip().lower()
+            filtered_mat = filtered_mat[
+                filtered_mat["材料編號"].astype(str).str.lower().str.contains(search_term, na=False) |
+                filtered_mat["材料名稱"].astype(str).str.lower().str.contains(search_term, na=False) |
+                filtered_mat["規格/尺寸"].astype(str).str.lower().str.contains(search_term, na=False) |
+                filtered_mat["分類"].astype(str).str.lower().str.contains(search_term, na=False)
+            ]
+        
+        st.dataframe(filtered_mat[["材料編號", "材料名稱", "規格/尺寸", "分類", "目前庫存", "單位"]], use_container_width=True)
         st.markdown("<br>", unsafe_allow_html=True)
         
         tab1, tab2 = st.tabs(["📤 師傅領料登記", "📥 進貨入庫登記"])
@@ -326,7 +306,23 @@ elif page == "🔨 工具借還與報修":
     
     if not df_tools.empty:
         st.subheader("📋 設備當前借還與在庫動態")
-        st.dataframe(df_tools, use_container_width=True)
+        
+        # 🔍 工具快速搜尋功能
+        search_tool = st.text_input("🔍 快速搜尋工具 (輸入名稱、編號、品牌/廠牌、型號、分類或當前借用人)：", placeholder="例如: KNIPEX, BAA0002, 壓著鉗, 福祿克, 手動工具...")
+        
+        filtered_tools = df_tools.copy()
+        if search_tool:
+            search_term = search_tool.strip().lower()
+            filtered_tools = filtered_tools[
+                filtered_tools["工具編號"].astype(str).str.lower().str.contains(search_term, na=False) |
+                filtered_tools["工具名稱"].astype(str).str.lower().str.contains(search_term, na=False) |
+                filtered_tools["品牌/廠牌"].astype(str).str.lower().str.contains(search_term, na=False) |
+                filtered_tools["型號"].astype(str).str.lower().str.contains(search_term, na=False) |
+                filtered_tools["分類"].astype(str).str.lower().str.contains(search_term, na=False) |
+                filtered_tools["當前借用人"].astype(str).str.lower().str.contains(search_term, na=False)
+            ]
+        
+        st.dataframe(filtered_tools, use_container_width=True)
         st.markdown("<br>", unsafe_allow_html=True)
         
         tab_tb, tab_tr, tab_maint = st.tabs(["📤 工具借出登記", "📥 工具歸還登記", "🔧 故障報修 / 維修完工"])
@@ -439,7 +435,6 @@ elif page == "📦 材料庫存總覽" and st.session_state.is_admin:
         df_mat["安全庫存量"] = pd.to_numeric(df_mat["安全庫存量"], errors='coerce').fillna(0).astype(int)
         low_stock_df = df_mat[df_mat["目前庫存"] <= df_mat["安全庫存量"]]
         
-        # 專業卡片化 KPI 區域
         m_col1, m_col2, m_col3 = st.columns(3)
         m_col1.metric("材料總品項數", f"{len(df_mat)} 項")
         m_col2.metric("庫存正常項目", f"{len(df_mat) - len(low_stock_df)} 項")
@@ -457,7 +452,19 @@ elif page == "📦 材料庫存總覽" and st.session_state.is_admin:
             st.download_button("📥 匯出材料總表 (CSV)", data=csv_data, file_name=f"材料庫存總表_{datetime.now().strftime('%Y%m%d')}.csv", mime="text/csv")
 
         st.subheader("📋 雲端即時材料資料庫")
-        st.dataframe(df_mat, use_container_width=True)
+        
+        # 🔍 管理員端快速搜尋
+        search_mat_adm = st.text_input("🔍 快速搜尋材料：", key="adm_search_mat")
+        filtered_mat_adm = df_mat.copy()
+        if search_mat_adm:
+            s_term = search_mat_adm.strip().lower()
+            filtered_mat_adm = filtered_mat_adm[
+                filtered_mat_adm["材料編號"].astype(str).str.lower().str.contains(s_term, na=False) |
+                filtered_mat_adm["材料名稱"].astype(str).str.lower().str.contains(s_term, na=False) |
+                filtered_mat_adm["規格/尺寸"].astype(str).str.lower().str.contains(s_term, na=False) |
+                filtered_mat_adm["分類"].astype(str).str.lower().str.contains(s_term, na=False)
+            ]
+        st.dataframe(filtered_mat_adm, use_container_width=True)
         st.markdown("---")
         
         tab1, tab2, tab3, tab4, tab5 = st.tabs(["📤 領料登記", "📥 進貨登記", "➕ 新增品項建檔", "✏️ 編輯材料資料", "🗑️ 刪除/下架品項"])
@@ -549,7 +556,20 @@ elif page == "🔨 工具資產追蹤" and st.session_state.is_admin:
     
     df_tools, sheet_tools = load_data("tools")
     if not df_tools.empty:
-        st.dataframe(df_tools, use_container_width=True)
+        # 🔍 管理員端快速搜尋
+        search_tool_adm = st.text_input("🔍 快速搜尋工具：", key="adm_search_tool")
+        filtered_tools_adm = df_tools.copy()
+        if search_tool_adm:
+            st_term = search_tool_adm.strip().lower()
+            filtered_tools_adm = filtered_tools_adm[
+                filtered_tools_adm["工具編號"].astype(str).str.lower().str.contains(st_term, na=False) |
+                filtered_tools_adm["工具名稱"].astype(str).str.lower().str.contains(st_term, na=False) |
+                filtered_tools_adm["品牌/廠牌"].astype(str).str.lower().str.contains(st_term, na=False) |
+                filtered_tools_adm["型號"].astype(str).str.lower().str.contains(st_term, na=False) |
+                filtered_tools_adm["分類"].astype(str).str.lower().str.contains(st_term, na=False) |
+                filtered_tools_adm["當前借用人"].astype(str).str.lower().str.contains(st_term, na=False)
+            ]
+        st.dataframe(filtered_tools_adm, use_container_width=True)
         st.markdown("---")
         tab_tb, tab_tr, tab_maint, tab_tn, tab_te, tab_td = st.tabs(["📤 借出", "📥 歸還", "🔧 維修", "➕ 新增工具建檔", "✏️ 編輯工具", "🗑️ 資產報銷"])
         
