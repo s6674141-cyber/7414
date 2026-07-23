@@ -105,20 +105,20 @@ def undo_last_log():
             qty = int(numbers[0]) if numbers else 0
             
             if action_type == "領料出庫":
-                df_mat.loc[idx, "目前庫存"] = int(df_mat.loc[idx, "目前庫存"]) + qty
+                df_mat.loc[idx, "目前庫存"] = pd.to_numeric(df_mat.loc[idx, "目前庫存"], errors='coerce') + qty
             else:
-                df_mat.loc[idx, "目前庫存"] = max(0, int(df_mat.loc[idx, "目前庫存"]) - qty)
+                df_mat.loc[idx, "目前庫存"] = max(0, pd.to_numeric(df_mat.loc[idx, "目前庫存"], errors='coerce') - qty)
                 
             save_data(sheet_mat, df_mat)
 
-    # 2. 撤銷「新增品項」(自動刪除剛剛誤建的材料)
+    # 2. 撤銷「新增品項」
     elif action_type == "新增品項":
         df_mat, sheet_mat = load_data("materials")
         if not df_mat.empty and item_name in df_mat["材料名稱"].astype(str).values:
             df_mat = df_mat[df_mat["材料名稱"].astype(str) != item_name].reset_index(drop=True)
             save_data(sheet_mat, df_mat)
 
-    # 3. 撤銷「刪除品項」(精準還原規格、分類、數量、安全存量、單位)
+    # 3. 撤銷「刪除品項」
     elif action_type == "刪除品項":
         df_mat, sheet_mat = load_data("materials")
         if item_name not in df_mat["材料名稱"].astype(str).values:
@@ -149,7 +149,7 @@ def undo_last_log():
             df_mat = pd.concat([df_mat, pd.DataFrame([new_row])], ignore_index=True)
             save_data(sheet_mat, df_mat)
 
-    # 4. 撤銷「工具借出」、「工具歸還」、「工具送修」或「維修完成」
+    # 4. 撤銷「工具借出/歸還/送修」
     elif action_type in ["工具借出", "工具歸還", "工具送修", "維修完成"]:
         df_tools, sheet_tools = load_data("tools")
         if not df_tools.empty and item_name in df_tools["工具名稱"].astype(str).values:
@@ -170,7 +170,7 @@ def undo_last_log():
                 
             save_data(sheet_tools, df_tools)
 
-    # 5. 撤銷「工具報銷刪除」(自動精準還原工具)
+    # 5. 撤銷「工具報銷刪除」
     elif action_type == "工具報銷刪除":
         df_tools, sheet_tools = load_data("tools")
         if item_name not in df_tools["工具名稱"].astype(str).values:
@@ -192,7 +192,6 @@ def undo_last_log():
             df_tools = pd.concat([df_tools, pd.DataFrame([new_row])], ignore_index=True)
             save_data(sheet_tools, df_tools)
 
-    # 刪除最後一筆 Log 並儲存
     df_logs = df_logs.iloc[:-1].reset_index(drop=True)
     save_data(sheet_logs, df_logs)
     add_log_gsheet("撤銷操作", item_name, "反轉成功", f"已撤銷: {action_type} ({detail})")
@@ -217,6 +216,7 @@ if page == "📦 材料庫存管理":
     df_mat, sheet_mat = load_data("materials")
     
     if not df_mat.empty:
+        # 強制轉型為數字，解決 Google Sheets 字串比對失真問題
         df_mat["目前庫存"] = pd.to_numeric(df_mat["目前庫存"], errors='coerce').fillna(0).astype(int)
         df_mat["安全庫存量"] = pd.to_numeric(df_mat["安全庫存量"], errors='coerce').fillna(0).astype(int)
         
@@ -229,12 +229,12 @@ if page == "📦 材料庫存管理":
         
         st.markdown("---")
         
-        # 1. 警報區域
+        # 1. 安全庫存警報區（精準觸發）
         if not low_stock_df.empty:
             st.error("⚠️ **【安全庫存警報】以下材料庫存已低於警戒線，請及時補貨！**")
             st.dataframe(low_stock_df[["材料編號", "材料名稱", "分類", "目前庫存", "安全庫存量", "單位"]], use_container_width=True)
 
-        # 2. 永遠顯示的匯出按鈕（不受庫存影響）
+        # 2. 無條件顯示：匯出 CSV 按鈕
         col_ex1, col_ex2 = st.columns([1, 4])
         with col_ex1:
             csv_data = df_mat.to_csv(index=False, encoding='utf-8-sig')
@@ -252,7 +252,7 @@ if page == "📦 材料庫存管理":
         
         st.subheader("🔄 庫存異動與資料編輯面板")
         
-        # 3. 強制載入 6 個頁籤 (包含 📤 批次匯入 CSV)
+        # 3. 無條件顯示：6 個控制頁籤（包含 📤 批次匯入 CSV）
         tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
             "📤 師傅領料登記", 
             "📥 進貨入庫登記", 
@@ -392,7 +392,6 @@ if page == "📦 材料庫存管理":
                     else:
                         st.error("❌ 請先勾選上方「我確定要刪除...」核取方塊！")
 
-        # 4. 批次匯入 CSV 功能（獨立為第 6 個頁籤）
         with tab6:
             st.subheader("📤 批次匯入材料 CSV 檔案")
             st.caption("請上傳符合格式的 CSV 檔案，將自動追加或覆蓋至雲端資料庫。")
