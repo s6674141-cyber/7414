@@ -9,20 +9,20 @@ import plotly.express as px
 import plotly.graph_objects as go
 
 # -------------------------------------------------------------------
-# 0. 頁面基本設定 (預設展開側邊欄)
+# 0. 跨平台字型與頁面基本設定
 # -------------------------------------------------------------------
 plt.rcParams['font.sans-serif'] = ['Microsoft JhengHei', 'PingFang TC', 'Arial Unicode MS', 'DejaVu Sans']
 plt.rcParams['axes.unicode_minus'] = False
 
 st.set_page_config(
-    page_title="ProStock 賽博科技戰情室 BI",
+    page_title="ProStock 雲端倉管與 BI 決策系統",
     page_icon="⚡",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
 # -------------------------------------------------------------------
-# 🎨 UI / CSS 深色極致科技風 (Dark Cyberpunk Theme)
+# 🎨 UI / CSS 自訂注入
 # -------------------------------------------------------------------
 custom_css = """
     <style>
@@ -32,13 +32,11 @@ custom_css = """
         font-family: 'Inter', 'Microsoft JhengHei', sans-serif;
     }
 
-    /* 全局背景改成深藍戰情室風格 */
     .stApp {
-        background-color: #0B0F19 !important;
-        color: #E2E8F0 !important;
+        background-color: #F8F9FA;
     }
 
-    /* 保留原生的展開箭頭，隱藏右上角其他選單 */
+    /* 只隱藏右上角部署與功能選單，完整保留頂部 Header 與側邊欄展開箭頭 */
     [data-testid="stAppDeployButton"], 
     #MainMenu, 
     footer {
@@ -50,73 +48,53 @@ custom_css = """
         background-color: transparent !important;
     }
 
-    /* 深色側邊欄風格 */
     section[data-testid="stSidebar"] {
-        background-color: #111827 !important;
-        border-right: 1px solid #1E293B !important;
+        background-color: #1E293B !important;
     }
     section[data-testid="stSidebar"] .stMarkdown p,
     section[data-testid="stSidebar"] label,
     section[data-testid="stSidebar"] span,
     section[data-testid="stSidebar"] div {
-        color: #94A3B8 !important;
+        color: #F8FAFC !important;
         font-weight: 500 !important;
     }
     section[data-testid="stSidebar"] .stCaption {
-        color: #64748B !important;
+        color: #CBD5E1 !important;
     }
     section[data-testid="stSidebar"] h1, 
     section[data-testid="stSidebar"] h2, 
     section[data-testid="stSidebar"] h3 {
-        color: #38BDF8 !important;
+        color: #FFFFFF !important;
         font-weight: 700 !important;
     }
 
-    /* 螢光科技感的按鈕 */
     .stButton>button {
         border-radius: 8px !important;
         font-weight: 600 !important;
         transition: all 0.2s ease-in-out !important;
-        border: 1px solid #0284C7 !important;
-        background-color: #0F172A !important;
-        color: #38BDF8 !important;
-    }
-    .stButton>button:hover {
-        background-color: #0284C7 !important;
-        color: #FFFFFF !important;
-        box-shadow: 0 0 12px rgba(56, 189, 248, 0.5) !important;
+        border: none !important;
     }
     .stButton>button[kind="primary"] {
-        background: linear-gradient(135deg, #0284C7 0%, #2563EB 100%) !important;
+        background: linear-gradient(135deg, #2563EB 0%, #1D4ED8 100%) !important;
         color: white !important;
-        border: none !important;
-        box-shadow: 0 0 10px rgba(37, 99, 235, 0.4) !important;
+        box-shadow: 0 2px 4px rgba(37, 99, 235, 0.2) !important;
     }
 
-    /* 深色頁籤與表格發光框 */
     .stTabs [data-baseweb="tab-list"] {
         gap: 8px;
-        background-color: #1E293B;
+        background-color: #E2E8F0;
         padding: 6px;
         border-radius: 10px;
     }
     .stTabs [aria-selected="true"] {
-        background-color: #0284C7 !important;
-        color: #FFFFFF !important;
+        background-color: #FFFFFF !important;
+        color: #0F172A !important;
         font-weight: 600;
     }
 
     [data-testid="stDataFrame"] {
-        border: 1px solid #1E293B;
+        border: 1px solid #E2E8F0;
         border-radius: 8px;
-        background-color: #111827 !important;
-    }
-
-    /* 頂部 KPI 卡片霓虹框線設計 */
-    [data-testid="stMetricValue"] {
-        font-size: 28px !important;
-        font-weight: 700 !important;
-        color: #38BDF8 !important;
     }
     </style>
 """
@@ -216,8 +194,8 @@ def undo_last_log():
 if "is_admin" not in st.session_state:
     st.session_state.is_admin = False
 
-st.sidebar.markdown("### ⚡ ProStock 科技戰情室")
-st.sidebar.caption("v4.0 Dark Cyberpunk BI")
+st.sidebar.markdown("### ⚡ ProStock 雲端倉管與 BI")
+st.sidebar.caption("v3.5 Full BI Edition")
 st.sidebar.markdown("---")
 
 role = st.sidebar.radio("👤 使用者權限切換：", ["👷 現場作業員 (師傅)", "🔑 系統管理員"])
@@ -465,28 +443,17 @@ elif page == "🔨 工具借還與報修":
                         st.rerun()
 
 # -------------------------------------------------------------------
-# 分頁 C：📊 BI 經營決策儀表板 (賽博暗黑科技視覺版)
+# 分頁 C：📊 BI 經營決策儀表板 (完整 7 大圖表經營控制台)
 # -------------------------------------------------------------------
 elif page == "📊 BI 經營決策儀表板" and st.session_state.is_admin:
-    st.title("⚡ 賽博科技數據戰情室")
-    st.caption("即時掌控專案預算、材料金流、甜甜圈資產佔比與機具 TCO 狀態")
+    st.title("📊 BI 商業智慧經營決策中心")
+    st.caption("結合專案預算、材料金流、庫存資產、設備 TCO 與調度效率之高階經營控制台")
     st.markdown("---")
     
     df_logs, _ = load_data("logs")
     df_mat, _ = load_data("materials")
     df_proj, _ = load_data("projects")
     df_tools, _ = load_data("tools")
-    
-    # 科技風 Plotly 圖表背景範本
-    dark_template = dict(
-        layout=go.Layout(
-            paper_bgcolor='rgba(15,23,42,0.6)',
-            plot_bgcolor='rgba(0,0,0,0)',
-            font=dict(color='#E2E8F0', family="Inter, Microsoft JhengHei"),
-            xaxis=dict(gridcolor='#1E293B'),
-            yaxis=dict(gridcolor='#1E293B')
-        )
-    )
     
     if not df_mat.empty:
         # 1. 整理單價數據
@@ -524,7 +491,7 @@ elif page == "📊 BI 經營決策儀表板" and st.session_state.is_admin:
             usage_logs["工程案名稱"] = "無"
 
         # ---------------------------------------------------------------
-        # 📊 頂部 KPI 數據總覽卡片 (深色發光框)
+        # 📊 頂部 KPI 卡片區
         # ---------------------------------------------------------------
         total_budget = pd.to_numeric(df_proj["材料總預算"], errors='coerce').sum() if not df_proj.empty else 0
         total_spent = usage_logs["消耗金額"].sum() if not usage_logs.empty else 0
@@ -540,7 +507,7 @@ elif page == "📊 BI 經營決策儀表板" and st.session_state.is_admin:
         st.markdown("<br>", unsafe_allow_html=True)
         
         # ---------------------------------------------------------------
-        # 【圖表 1】專案材料預算 vs 實際消耗金額 (霓虹科技雙柱圖)
+        # 【圖表 1】專案材料預算 vs 實際消耗金額
         # ---------------------------------------------------------------
         st.markdown("##### 📈 【圖表 1】專案材料預算 vs 實際消耗金額 (Budget vs. Actual Cost)")
         
@@ -552,20 +519,21 @@ elif page == "📊 BI 經營決策儀表板" and st.session_state.is_admin:
             merged_proj["消耗金額"] = merged_proj["消耗金額"].fillna(0)
             merged_proj["預算使用率 (%)"] = (merged_proj["消耗金額"] / merged_proj["材料總預算"] * 100).round(1).fillna(0)
             
-            fig1 = go.Figure(layout=dark_template['layout'])
+            fig1 = go.Figure()
             fig1.add_trace(go.Bar(
                 y=merged_proj["工程案名稱"], x=merged_proj["材料總預算"],
-                name="材料總預算", orientation='h', marker_color='#0284C7',
+                name="材料總預算 (元)", orientation='h', marker_color='#93C5FD',
                 text=[f"${x:,.0f}" for x in merged_proj["材料總預算"]], textposition='outside'
             ))
             fig1.add_trace(go.Bar(
                 y=merged_proj["工程案名稱"], x=merged_proj["消耗金額"],
-                name="實際消耗金額", orientation='h', marker_color='#38BDF8',
+                name="實際消耗金額 (元)", orientation='h', marker_color='#1D4ED8',
                 text=[f"${x:,.0f}" for x in merged_proj["消耗金額"]], textposition='outside'
             ))
             fig1.update_layout(
                 barmode='group', height=320, margin=dict(l=10, r=40, t=10, b=10),
-                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+                paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)'
             )
             st.plotly_chart(fig1, use_container_width=True)
             
@@ -586,34 +554,28 @@ elif page == "📊 BI 經營決策儀表板" and st.session_state.is_admin:
         st.markdown("---")
         
         # ---------------------------------------------------------------
-        # 【圖表 2A & 2B】材料花費佔比 (環形圖 Donut) vs 庫存資產 (炫光圖)
+        # 【圖表 2A & 2B】動態領用 Top 5 vs 靜態庫存資產 Top 5
         # ---------------------------------------------------------------
         col_a, col_b = st.columns(2)
         
         with col_a:
-            st.markdown("##### 🍩 【圖表 2A】材料領用金額佔比 (環形甜甜圈圖)")
+            st.markdown("##### 💎 【圖表 2A】高價值材料 (A類資產) 消耗總金額排行榜")
             if not usage_logs.empty and usage_logs["消耗金額"].sum() > 0:
                 mat_cost_df = usage_logs.groupby("項目名稱")["消耗金額"].sum().reset_index()
-                mat_cost_df = mat_cost_df.sort_values(by="消耗金額", ascending=False)
+                mat_cost_df = mat_cost_df.sort_values(by="消耗金額", ascending=False).head(5)
                 
-                # Plotly 科技感甜甜圈環形圖
-                fig2a = go.Figure(data=[go.Pie(
-                    labels=mat_cost_df["項目名稱"],
-                    values=mat_cost_df["消耗金額"],
-                    hole=.55, # 甜甜圈圓孔
-                    textinfo='label+percent',
-                    marker=dict(colors=['#00F2FE', '#4FACFE', '#00F5A0', '#7F00FF', '#FF007F', '#F6D365'])
-                )], layout=dark_template['layout'])
-                
-                fig2a.update_layout(
-                    height=320, margin=dict(l=10, r=10, t=10, b=10),
-                    annotations=[dict(text=f"${total_spent:,.0f}<br>總消耗", x=0.5, y=0.5, font_size=16, showarrow=False, font_color="#38BDF8")]
+                fig2a = px.bar(
+                    mat_cost_df, x="消耗金額", y="項目名稱", orientation='h',
+                    text=[f"${x:,.0f}" for x in mat_cost_df["消耗金額"]],
+                    color="消耗金額", color_continuous_scale="Teal"
                 )
+                fig2a.update_traces(textposition='outside')
+                fig2a.update_layout(yaxis={'categoryorder':'total ascending', 'title':''}, coloraxis_showscale=False, height=320, margin=dict(l=10, r=40, t=10, b=10))
                 st.plotly_chart(fig2a, use_container_width=True)
                 
                 top_mat = mat_cost_df.iloc[0]["項目名稱"]
                 top_val = mat_cost_df.iloc[0]["消耗金額"]
-                st.info(f"💡 **ABC 採購建議**：【{top_mat}】為領料花費最高之材料（已消耗 ${top_val:,.0f} 元）。建議採用 JIT 及時採購，避免囤積資金。")
+                st.info(f"💡 **ABC 採購建議**：【{top_mat}】為金流消耗最高之材料（已消耗 ${top_val:,.0f} 元）。建議採用 JIT 及時採購，避免囤積資金。")
             else:
                 st.info("尚無領料出庫金流紀錄。")
 
@@ -628,13 +590,12 @@ elif page == "📊 BI 經營決策儀表板" and st.session_state.is_admin:
                     color="庫存總價值", color_continuous_scale="Purples"
                 )
                 fig2b.update_traces(textposition='outside')
-                fig2b.update_layout(dark_template['layout'])
                 fig2b.update_layout(yaxis={'categoryorder':'total ascending', 'title':''}, coloraxis_showscale=False, height=320, margin=dict(l=10, r=40, t=10, b=10))
                 st.plotly_chart(fig2b, use_container_width=True)
                 
                 top_stock_mat = stock_val_df.iloc[0]["材料名稱"]
                 top_stock_val = stock_val_df.iloc[0]["庫存總價值"]
-                st.warning(f"💡 **靜態資產建議**：【{top_stock_mat}】目前倉庫積壓金額達 **${top_stock_val:,.0f} 元**。請 PM 優先調撥使用，加速資金週轉。")
+                st.warning(f"💡 **靜態資產建議**：【{top_stock_mat}】目前倉庫積壓金額達 **${top_stock_val:,.0f} 元**。請 PM 優先將此庫存調撥至近期專案使用，加速資產週轉。")
             else:
                 st.info("目前倉庫內無高價值庫存材料。")
 
@@ -675,7 +636,6 @@ elif page == "📊 BI 經營決策儀表板" and st.session_state.is_admin:
                     text="送修次數", color="送修次數", color_continuous_scale="Reds"
                 )
                 fig3.update_traces(textposition='outside')
-                fig3.update_layout(dark_template['layout'])
                 fig3.update_layout(yaxis={'categoryorder':'total ascending', 'title':''}, coloraxis_showscale=False, height=320, margin=dict(l=10, r=30, t=10, b=10))
                 st.plotly_chart(fig3, use_container_width=True)
                 
@@ -695,7 +655,7 @@ elif page == "📊 BI 經營決策儀表板" and st.session_state.is_admin:
         st.markdown("---")
         
         # ---------------------------------------------------------------
-        # 【圖表 4 & 5】每日金額動態趨勢 vs 工具狀態分佈 (甜甜圈環形圖)
+        # 【圖表 4 & 5】每日領料金額動態趨勢 vs 工具外借超期滯留警報
         # ---------------------------------------------------------------
         col_c, col_d = st.columns(2)
         
@@ -704,6 +664,7 @@ elif page == "📊 BI 經營決策儀表板" and st.session_state.is_admin:
             if not usage_logs.empty and "時間" in usage_logs.columns:
                 try:
                     usage_logs_copy = usage_logs.copy()
+                    # 強制轉為 datetime 格式，支援多種常見時間字串
                     usage_logs_copy["時間_dt"] = pd.to_datetime(usage_logs_copy["時間"], errors='coerce')
                     usage_logs_valid = usage_logs_copy.dropna(subset=["時間_dt"])
                     
@@ -712,8 +673,7 @@ elif page == "📊 BI 經營決策儀表板" and st.session_state.is_admin:
                         trend_df = usage_logs_valid.groupby("日期")["消耗金額"].sum().reset_index()
                         
                         fig4 = px.line(trend_df, x="日期", y="消耗金額", markers=True, line_shape="spline")
-                        fig4.update_traces(line_color="#00F2FE", line_width=3)
-                        fig4.update_layout(dark_template['layout'])
+                        fig4.update_traces(line_color="#2563EB", line_width=3)
                         fig4.update_layout(height=280, margin=dict(l=10, r=20, t=10, b=10), xaxis_title="", yaxis_title="每日消耗金額 (元)")
                         st.plotly_chart(fig4, use_container_width=True)
                         st.caption("💡 **資金流洞察**：監控每日資金消耗峰值，可協助財務預先安排專案材料款項。")
@@ -725,26 +685,26 @@ elif page == "📊 BI 經營決策儀表板" and st.session_state.is_admin:
                 st.info("尚無時間序列數據。")
 
         with col_d:
-            st.markdown("##### 🍩 【圖表 5】工具資產在庫與調度狀態 (環形甜甜圈圖)")
+            st.markdown("##### ⏳ 【圖表 5】外借工具超期滯留警報 (> 7 天未歸還)")
             if not df_tools.empty:
-                tool_status_df = df_tools["狀態"].value_counts().reset_index()
-                tool_status_df.columns = ["狀態", "數量"]
-                
-                # 工具狀態甜甜圈環形圖
-                fig5 = go.Figure(data=[go.Pie(
-                    labels=tool_status_df["狀態"],
-                    values=tool_status_df["數量"],
-                    hole=.6,
-                    textinfo='label+value',
-                    marker=dict(colors=['#00F5A0', '#00F2FE', '#FF007F'])
-                )], layout=dark_template['layout'])
-                
-                fig5.update_layout(
-                    height=280, margin=dict(l=10, r=10, t=10, b=10),
-                    annotations=[dict(text=f"{len(df_tools)} 件<br>總資產", x=0.5, y=0.5, font_size=16, showarrow=False, font_color="#00F5A0")]
-                )
-                st.plotly_chart(fig5, use_container_width=True)
-                st.caption("💡 **機具可用率洞察**：即時掌控機具在庫比率，維修與外借狀況一目了然。")
+                borrowed_tools = df_tools[df_tools["狀態"] == "借出"].copy()
+                if not borrowed_tools.empty and "借出日期" in borrowed_tools.columns:
+                    today = pd.to_datetime("today").date()
+                    borrowed_tools["借出天數"] = borrowed_tools["借出日期"].apply(
+                        lambda x: (today - pd.to_datetime(x, errors='coerce').date()).days if str(x) != "無" and pd.notnull(x) else 0
+                    )
+                    overdue_tools = borrowed_tools[borrowed_tools["借出天數"] >= 7]
+                    
+                    if not overdue_tools.empty:
+                        st.dataframe(
+                            overdue_tools[["工具編號", "工具名稱", "當前借用人", "借出日期", "借出天數"]],
+                            use_container_width=True
+                        )
+                        st.warning("💡 **調度建議**：以上工具外借已超過 7 天，請發送催還通知，避免機具閒置或重複購買。")
+                    else:
+                        st.success("🎉 當前所有外借工具均在正常 7 天借期內！")
+                else:
+                    st.info("目前沒有外借中的工具。")
             else:
                 st.info("無工具資料。")
 
@@ -979,7 +939,7 @@ elif page == "📤 CSV 批次資料匯入" and st.session_state.is_admin:
                     df_tools, sheet_tools = load_data("tools")
                     if "新機購入單價" not in import_df.columns: import_df["新機購入單價"] = 0
                     final_df = import_df if "完全覆蓋" in import_mode else pd.concat([df_tools, import_df], ignore_index=True)
-                    save_data(sheet_tools, df_tools)
+                    save_data(sheet_tools, final_df)
                     st.success("🎉 工具資料匯入成功！")
                 elif "工程案" in target_type:
                     df_proj, sheet_proj = load_data("projects")
