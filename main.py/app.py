@@ -25,6 +25,7 @@ st.set_page_config(
     page_icon="🛠️",
     layout="wide"
 )
+
 # -------------------------------------------------------------------
 # 隱藏右上角 GitHub 連結、Fork 按鈕與 header 頂欄
 # -------------------------------------------------------------------
@@ -42,6 +43,7 @@ hide_streamlit_style = """
     </style>
 """
 st.markdown(hide_streamlit_style, unsafe_allow_html=True)
+
 # -------------------------------------------------------------------
 # 2. Google Sheets 雲端資料庫連線邏輯
 # -------------------------------------------------------------------
@@ -83,7 +85,7 @@ def add_log_gsheet(action_type, item_name, detail, note=""):
         save_data(sheet_logs, df_logs)
 
 def undo_last_log():
-    """撤銷 / 復原最後一筆操作歷史 (精準還原分類、數量與安全存量)"""
+    """撤銷 / 復原最後一筆操作歷史 (精準還原分類、規格、數量與安全存量)"""
     df_logs, sheet_logs = load_data("logs")
     if df_logs.empty:
         return False, "目前沒有可撤銷的歷史紀錄！"
@@ -99,7 +101,6 @@ def undo_last_log():
         df_mat, sheet_mat = load_data("materials")
         if not df_mat.empty and item_name in df_mat["材料名稱"].astype(str).values:
             idx = df_mat[df_mat["材料名稱"].astype(str) == item_name].index[0]
-            # 抽出純數字
             numbers = re.findall(r'\d+', detail)
             qty = int(numbers[0]) if numbers else 0
             
@@ -117,7 +118,6 @@ def undo_last_log():
             df_mat = df_mat[df_mat["材料名稱"].astype(str) != item_name].reset_index(drop=True)
             save_data(sheet_mat, df_mat)
 
-    # 3. 撤銷「刪除品項」(精準還原分類、數量、安全存量、單位)
     # 3. 撤銷「刪除品項」(精準還原規格、分類、數量、安全存量、單位)
     elif action_type == "刪除品項":
         df_mat, sheet_mat = load_data("materials")
@@ -141,17 +141,6 @@ def undo_last_log():
                 "材料編號": new_id, 
                 "材料名稱": item_name,
                 "規格/尺寸": spec,
-                "分類": cat, 
-                "目前庫存": qty, 
-                "安全庫存量": safe_qty, 
-                "單位": unit
-            }
-            df_mat = pd.concat([df_mat, pd.DataFrame([new_row])], ignore_index=True)
-            save_data(sheet_mat, df_mat)
-            
-            new_row = {
-                "材料編號": new_id, 
-                "材料名稱": item_name, 
                 "分類": cat, 
                 "目前庫存": qty, 
                 "安全庫存量": safe_qty, 
@@ -193,6 +182,8 @@ def undo_last_log():
             new_row = {
                 "工具編號": new_id,
                 "工具名稱": item_name,
+                "品牌/廠牌": "無",
+                "型號": "無",
                 "分類": cat,
                 "狀態": "在庫",
                 "當前借用人": "無",
@@ -242,7 +233,7 @@ if page == "📦 材料庫存管理":
             st.error("⚠️ **【安全庫存警報】以下材料庫存已低於警戒線，請及時補貨！**")
             st.dataframe(low_stock_df[["材料編號", "材料名稱", "分類", "目前庫存", "安全庫存量", "單位"]], use_container_width=True)
             
-            # 🆕 一鍵匯出採購建議 CSV
+            # 一鍵匯出採購建議 CSV
             csv_data = low_stock_df[["材料編號", "材料名稱", "分類", "目前庫存", "安全庫存量", "單位"]].to_csv(index=False, encoding='utf-8-sig')
             st.download_button(
                 label="📥 匯出低庫存採購清單 (CSV)",
@@ -301,7 +292,7 @@ if page == "📦 材料庫存管理":
                     st.success(f"✅ 成功補貨 [{mat_name}] {in_qty} {unit}！已同步存入 Google Sheets！")
                     st.rerun()
 
-       with tab3:
+        with tab3:
             with st.form("new_material_form"):
                 new_name = st.text_input("材料名稱 (例如: 單芯電線)")
                 new_spec = st.text_input("規格/尺寸 (例如: 2.0mm / 3/4吋)")
@@ -379,16 +370,16 @@ if page == "📦 材料庫存管理":
                 
                 if st.button("🔥 確定執行刪除材料"):
                     if confirm_del_m:
+                        del_spec = df_mat.loc[m_del_idx, "規格/尺寸"] if "規格/尺寸" in df_mat.columns else "無"
                         df_mat = df_mat.drop(m_del_idx).reset_index(drop=True)
                         save_data(sheet_mat, df_mat)
-                        # 將刪除前的數據打包備份在 Note 裡面！
-                        del_spec = df_mat.loc[m_del_idx, "規格/尺寸"] if "規格/尺寸" in df_mat.columns else "無"
                         backup_note = f"規格:{del_spec} | 分類:{del_cat} | 庫存:{del_qty} | 安全量:{del_safe} | 單位:{del_unit}"
                         add_log_gsheet("刪除品項", del_m_name, "材料刪除", backup_note)
                         st.success(f"✅ 成功刪除材料：[{del_m_name}]！")
                         st.rerun()
                     else:
                         st.error("❌ 請先勾選上方「我確定要刪除...」核取方塊！")
+
         with tab6:
             st.subheader("📤 批次匯入材料 CSV 檔案")
             st.caption("請上傳符合格式的 CSV 檔案，將自動追加或覆蓋至雲端資料庫。")
@@ -397,16 +388,6 @@ if page == "📦 材料庫存管理":
             
             if uploaded_file is not None:
                 try:
-                    # 讀取上傳的 CSV 檔案
-                    import_df = pd.read_csv(uploaded_file)with tab6:
-            st.subheader("📤 批次匯入材料 CSV 檔案")
-            st.caption("請上傳符合格式的 CSV 檔案，將自動追加或覆蓋至雲端資料庫。")
-            
-            uploaded_file = st.file_uploader("選擇要上傳的材料 CSV 檔", type=["csv"])
-            
-            if uploaded_file is not None:
-                try:
-                    # 讀取上傳的 CSV 檔案
                     import_df = pd.read_csv(uploaded_file)
                     st.write("📋 預覽即將匯入的資料：")
                     st.dataframe(import_df, use_container_width=True)
@@ -414,34 +395,28 @@ if page == "📦 材料庫存管理":
                     import_mode = st.radio("請選擇匯入模式：", ["追加至現有資料庫底部", "完全覆蓋現有資料庫 (請謹慎使用)"])
                     
                     if st.button("🚀 確認執行匯入"):
-                        # 確保必要的欄位都有存在
                         required_cols = ["材料名稱", "分類", "目前庫存", "安全庫存量", "單位"]
                         missing_cols = [c for c in required_cols if c not in import_df.columns]
                         
                         if missing_cols:
-                            st.error(f"❌ 上傳的 CSV 缺少必要的欄位：{ missing_cols }，請修正後重試！")
+                            st.error(f"❌ 上傳的 CSV 缺少必要的欄位：{missing_cols}，請修正後重試！")
                         else:
-                            # 補齊規格/尺寸欄位（若原本 CSV 沒有）
                             if "規格/尺寸" not in import_df.columns:
                                 import_df["規格/尺寸"] = "無"
                                 
                             if import_mode == "完全覆蓋現有資料庫 (請謹慎使用)":
-                                # 若沒有材料編號，自動生成
                                 if "材料編號" not in import_df.columns:
                                     import_df["材料編號"] = [f"M{i+1:03d}" for i in range(len(import_df))]
                                 final_df = import_df
                             else:
-                                # 追加模式：生成新的編號並與原有資料合併
                                 start_id = len(df_mat) + 1
                                 if "材料編號" not in import_df.columns:
                                     import_df["材料編號"] = [f"M{i+start_id:03d}" for i in range(len(import_df))]
                                 final_df = pd.concat([df_mat, import_df], ignore_index=True)
                             
-                            # 重新依預設欄位順序整理
                             cols_order = ["材料編號", "材料名稱", "規格/尺寸", "分類", "目前庫存", "安全庫存量", "單位"]
                             final_df = final_df[cols_order]
                             
-                            # 覆寫至 Google Sheets
                             save_data(sheet_mat, final_df)
                             add_log_gsheet("批次匯入", uploaded_file.name, f"匯入 {len(import_df)} 筆資料", f"模式: {import_mode}")
                             st.success(f"🎉 成功匯入 {len(import_df)} 筆材料資料至 Google Sheets！")
@@ -449,6 +424,7 @@ if page == "📦 材料庫存管理":
                             
                 except Exception as e:
                     st.error(f"❌ 讀取 CSV 檔案失敗，請確認檔案編碼是否為 UTF-8！錯誤資訊：{e}")
+
 # -------------------------------------------------------------------
 # 分頁 2：工具資產追蹤 (含維修/保養流程)
 # -------------------------------------------------------------------
@@ -488,34 +464,11 @@ elif page == "🔨 工具資產追蹤":
         
         st.markdown("---")
         
-        tab_tb, tab_tr, tab_maint, tab_te, tab_td = st.tabs(["📤 登記工具借出", "📥 登記工具歸還", "🔧 損壞報修 / 維修完成", "✏️ 修改/編輯工具", "🗑️ 報銷刪除工具"])
-        # 如果需要新增工具功能
+        tab_tb, tab_tr, tab_maint, tab_tn, tab_te, tab_td = st.tabs([
+            "📤 登記工具借出", "📥 登記工具歸還", "🔧 損壞報修 / 維修完成", 
+            "➕ 新增工具建檔", "✏️ 修改/編輯工具", "🗑️ 報銷刪除工具"
+        ])
         
-        with st.form("new_tool_form"):
-            t_name = st.text_input("工具名稱 (例如: 充電式衝擊起子機)")
-            t_brand = st.text_input("品牌/廠牌 (例如: 牧田 Makita)")
-            t_model = st.text_input("型號 (例如: DTD172)")
-            t_cat = st.text_input("分類 (例如: 電動工具)")
-            submit_new_t = st.form_submit_button("確認新增工具建檔")
-            
-            if submit_new_t and t_name:
-                new_t_id = f"T{len(df_tools) + 1:03d}"
-                new_tool_row = {
-                    "工具編號": new_t_id,
-                    "工具名稱": t_name,
-                    "品牌/廠牌": t_brand if t_brand else "無",
-                    "型號": t_model if t_model else "無",
-                    "分類": t_cat if t_cat else "通用",
-                    "狀態": "在庫",
-                    "當前借用人": "無",
-                    "借出日期": "無"
-                }
-                df_tools = pd.concat([df_tools, pd.DataFrame([new_tool_row])], ignore_index=True)
-                save_data(sheet_tools, df_tools)
-                add_log_gsheet("新增工具", t_name, f"品牌:{t_brand} | 型號:{t_model}", "新品工具建檔")
-                st.success(f"✅ 成功建檔工具：[{new_t_id}] {t_brand} {t_name} ({t_model})！")
-                st.rerun()
-                
         with tab_tb:
             in_stock_tools = df_tools[df_tools["狀態"] == "在庫"]
             if not in_stock_tools.empty:
@@ -611,6 +564,33 @@ elif page == "🔨 工具資產追蹤":
                 else:
                     st.success("🎉 目前沒有正在維修中的工具！")
 
+        with tab_tn:
+            st.subheader("➕ 新增工具建檔")
+            with st.form("new_tool_form"):
+                t_name = st.text_input("工具名稱 (例如: 充電式衝擊起子機)")
+                t_brand = st.text_input("品牌/廠牌 (例如: 牧田 Makita)")
+                t_model = st.text_input("型號 (例如: DTD172)")
+                t_cat = st.text_input("分類 (例如: 電動工具)")
+                submit_new_t = st.form_submit_button("確認新增工具建檔")
+                
+                if submit_new_t and t_name:
+                    new_t_id = f"T{len(df_tools) + 1:03d}"
+                    new_tool_row = {
+                        "工具編號": new_t_id,
+                        "工具名稱": t_name,
+                        "品牌/廠牌": t_brand if t_brand else "無",
+                        "型號": t_model if t_model else "無",
+                        "分類": t_cat if t_cat else "通用",
+                        "狀態": "在庫",
+                        "當前借用人": "無",
+                        "借出日期": "無"
+                    }
+                    df_tools = pd.concat([df_tools, pd.DataFrame([new_tool_row])], ignore_index=True)
+                    save_data(sheet_tools, df_tools)
+                    add_log_gsheet("新增工具", t_name, f"品牌:{t_brand} | 型號:{t_model}", "新品工具建檔")
+                    st.success(f"✅ 成功建檔工具：[{new_t_id}] {t_brand} {t_name} ({t_model})！")
+                    st.rerun()
+
         with tab_te:
             st.subheader("✏️ 修改/編輯既有工具資料")
             selected_edit_tool = st.selectbox("選擇要修改的工具", df_tools["工具編號"].astype(str) + " - " + df_tools["工具名稱"], key="edit_tool_sel")
@@ -619,7 +599,6 @@ elif page == "🔨 工具資產追蹤":
                 edit_t_id = selected_edit_tool.split(" - ")[0]
                 t_idx = df_tools[df_tools["工具編號"].astype(str) == edit_t_id].index[0]
                 
-                # 取得原有欄位數值（若原本無該欄位則帶入預設值）
                 curr_brand = df_tools.loc[t_idx, "品牌/廠牌"] if "品牌/廠牌" in df_tools.columns else "無"
                 curr_model = df_tools.loc[t_idx, "型號"] if "型號" in df_tools.columns else "無"
                 
@@ -738,7 +717,6 @@ elif page == "📜 歷史異動紀錄":
         st.markdown("---")
         st.subheader("📋 歷史流水帳搜尋與明細")
         
-        # 🆕 新增搜尋與篩選控制列
         col_s1, col_s2 = st.columns([2, 1])
         with col_s1:
             search_term = st.text_input("🔍 搜尋關鍵字 (項目名稱 / 師傅姓名 / 備註)")
