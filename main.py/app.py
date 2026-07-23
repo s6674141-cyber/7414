@@ -25,7 +25,17 @@ st.set_page_config(
     page_icon="🛠️",
     layout="wide"
 )
-
+# -------------------------------------------------------------------
+# 隱藏右上角 GitHub 連結、Fork 按鈕與 header 頂欄
+# -------------------------------------------------------------------
+hide_streamlit_style = """
+    <style>
+    #MainMenu {visibility: hidden;}
+    footer {visibility: hidden;}
+    header {visibility: hidden;}
+    </style>
+"""
+st.markdown(hide_streamlit_style, unsafe_allow_html=True)
 # -------------------------------------------------------------------
 # 2. Google Sheets 雲端資料庫連線邏輯
 # -------------------------------------------------------------------
