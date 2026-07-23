@@ -30,9 +30,15 @@ st.set_page_config(
 # -------------------------------------------------------------------
 hide_streamlit_style = """
     <style>
-    #MainMenu {visibility: hidden;}
-    footer {visibility: hidden;}
-    header {visibility: hidden;}
+    /* 隱藏新版 Streamlit 右上角工具列 (包含 Fork、GitHub 貓咪、三點選單) */
+    .stAppToolbar, [data-testid="stToolbar"] {
+        display: none !important;
+    }
+    /* 隱藏舊版 header 與頁尾 */
+    #MainMenu, header, footer {
+        visibility: hidden !important;
+        display: none !important;
+    }
     </style>
 """
 st.markdown(hide_streamlit_style, unsafe_allow_html=True)
