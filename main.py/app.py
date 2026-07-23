@@ -637,9 +637,14 @@ elif page == "📤 CSV 批次資料匯入" and st.session_state.is_admin:
 # -------------------------------------------------------------------
 # 分頁 F：📊 經營決策儀表板 (管理員專屬)
 # -------------------------------------------------------------------
+# -------------------------------------------------------------------
+# 分頁 F：📊 經營決策儀表板 (Plotly 高階商業視覺版)
+# -------------------------------------------------------------------
 elif page == "📊 經營決策儀表板" and st.session_state.is_admin:
-    st.title("📊 數據分析與決策中心")
-    st.caption("透過歷史異動追蹤工程耗用與設備損耗頻率")
+    import plotly.express as px  # 自動載入高效能圖表套件
+    
+    st.title("📊 數據分析與經營決策中心")
+    st.caption("透過歷史異動數據，精準掌握工程案耗材支出與設備損耗狀況")
     st.markdown("---")
     
     df_logs, _ = load_data("logs")
@@ -648,18 +653,93 @@ elif page == "📊 經營決策儀表板" and st.session_state.is_admin:
         usage_logs = df_logs[df_logs["類型"] == "領料出庫"]
         repair_logs = df_logs[df_logs["類型"] == "工具送修"]
         
+        # 頂部 KPI 數據統計卡片
+        col_kpi1, col_kpi2, col_kpi3 = st.columns(3)
+        col_kpi1.metric("累積領料出庫", f"{len(usage_logs)} 次")
+        col_kpi2.metric("累積工具借出", f"{len(df_logs[df_logs['類型'] == '工具借出'])} 次")
+        col_kpi3.metric("⚠️ 設備報修次數", f"{len(repair_logs)} 次", delta_color="inverse")
+        
+        st.markdown("<br>", unsafe_allow_html=True)
+        
         col1, col2 = st.columns(2)
+        
+        # 📊 圖表 1：各工程案耗材領用分佈 (水平漸層長條圖)
         with col1:
-            st.subheader("🏗️ 各工程案耗材領用分佈")
+            st.markdown("##### 🏗️ 各工程案耗材領用頻率排行榜")
             if not usage_logs.empty:
-                usage_logs["工程案"] = usage_logs["備註"].apply(lambda x: str(x).split("-")[0].strip() if "-" in str(x) else "未分類工程")
-                st.bar_chart(usage_logs["工程案"].value_counts())
-        with col2:
-            st.subheader("🚨 高頻損壞/送修工具警報")
-            if not repair_logs.empty:
-                st.bar_chart(repair_logs["項目名稱"].value_counts())
+                # 解析工程名稱
+                usage_logs_copy = usage_logs.copy()
+                usage_logs_copy["工程案"] = usage_logs_copy["備註"].apply(
+                    lambda x: str(x).split("-")[0].strip() if "-" in str(x) else "未分類工程"
+                )
+                proj_df = usage_logs_copy["工程案"].value_counts().reset_index()
+                proj_df.columns = ["工程案名稱", "領料次數"]
+                
+                # Plotly 高質感水平長條圖
+                fig1 = px.bar(
+                    proj_df,
+                    x="領料次數",
+                    y="工程案名稱",
+                    orientation='h',
+                    text="領料次數",
+                    color="領料次數",
+                    color_continuous_scale="Blues"
+                )
+                fig1.update_traces(
+                    textposition='outside', 
+                    marker_line_color='rgb(8,48,107)',
+                    marker_line_width=1,
+                    opacity=0.85
+                )
+                fig1.update_layout(
+                    yaxis={'categoryorder':'total ascending', 'title': ''},
+                    xaxis={'title': '領料總次數'},
+                    coloraxis_showscale=False,
+                    margin=dict(l=10, r=30, t=20, b=20),
+                    height=320,
+                    paper_bgcolor='rgba(0,0,0,0)',
+                    plot_bgcolor='rgba(0,0,0,0)'
+                )
+                st.plotly_chart(fig1, use_container_width=True)
             else:
-                st.success("🎉 設備狀況良好，當前無送修紀錄！")
+                st.info("尚無工程領料紀錄。")
+
+        # 📊 圖表 2：高頻損壞 / 送修工具警報 (警告紅漸層圖)
+        with col2:
+            st.markdown("##### 🚨 高頻損壞 / 送修工具警報")
+            if not repair_logs.empty:
+                repair_df = repair_logs["項目名稱"].value_counts().reset_index()
+                repair_df.columns = ["工具名稱", "送修次數"]
+                
+                fig2 = px.bar(
+                    repair_df,
+                    x="送修次數",
+                    y="工具名稱",
+                    orientation='h',
+                    text="送修次數",
+                    color="送修次數",
+                    color_continuous_scale="Reds"
+                )
+                fig2.update_traces(
+                    textposition='outside',
+                    marker_line_color='rgb(139,0,0)',
+                    marker_line_width=1,
+                    opacity=0.85
+                )
+                fig2.update_layout(
+                    yaxis={'categoryorder':'total ascending', 'title': ''},
+                    xaxis={'title': '累積送修次數'},
+                    coloraxis_showscale=False,
+                    margin=dict(l=10, r=30, t=20, b=20),
+                    height=320,
+                    paper_bgcolor='rgba(0,0,0,0)',
+                    plot_bgcolor='rgba(0,0,0,0)'
+                )
+                st.plotly_chart(fig2, use_container_width=True)
+            else:
+                st.success("🎉 目前設備狀況良好，無任何故障送修紀錄！")
+    else:
+        st.info("目前雲端流水帳尚無異動紀錄，請執行領料或借還操作後查看。")
 
 # -------------------------------------------------------------------
 # 分頁 G：📜 雲端流水帳紀錄 (管理員專屬)
