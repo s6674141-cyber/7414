@@ -31,11 +31,11 @@ st.set_page_config(
 # -------------------------------------------------------------------
 hide_streamlit_style = """
     <style>
-    /* 隱藏新版 Streamlit 右上角工具列 (包含 Fork、GitHub 貓咪、三點選單) */
+    /* 隱藏 Streamlit 右上角工具列 */
     .stAppToolbar, [data-testid="stToolbar"] {
         display: none !important;
     }
-    /* 隱藏舊版 header 與頁尾 */
+    /* 隱藏 header 與頁尾 */
     #MainMenu, header, footer {
         visibility: hidden !important;
         display: none !important;
@@ -85,7 +85,7 @@ def add_log_gsheet(action_type, item_name, detail, note=""):
         save_data(sheet_logs, df_logs)
 
 def undo_last_log():
-    """撤銷 / 復原最後一筆操作歷史 (精準還原分類、規格、數量與安全存量)"""
+    """撤銷 / 復原最後一筆操作歷史"""
     df_logs, sheet_logs = load_data("logs")
     if df_logs.empty:
         return False, "目前沒有可撤銷的歷史紀錄！"
@@ -204,7 +204,14 @@ st.sidebar.title("🛠️ 水電倉管系統 (雲端同步版)")
 st.sidebar.markdown("---")
 page = st.sidebar.radio(
     "請選擇系統功能分頁：",
-    ["📦 材料庫存管理", "🔨 工具資產追蹤", "📊 數據分析儀表板", "📜 歷史異動紀錄", "⚙️ 管理員安全後台"]
+    [
+        "📦 材料庫存管理", 
+        "🔨 工具資產追蹤", 
+        "📤 CSV 批次匯入",  # 👈 獨立出來的核心功能分頁！
+        "📊 數據分析儀表板", 
+        "📜 歷史異動紀錄", 
+        "⚙️ 管理員安全後台"
+    ]
 )
 
 # -------------------------------------------------------------------
@@ -216,7 +223,6 @@ if page == "📦 材料庫存管理":
     df_mat, sheet_mat = load_data("materials")
     
     if not df_mat.empty:
-        # 強制轉型為數字，解決 Google Sheets 字串比對失真問題
         df_mat["目前庫存"] = pd.to_numeric(df_mat["目前庫存"], errors='coerce').fillna(0).astype(int)
         df_mat["安全庫存量"] = pd.to_numeric(df_mat["安全庫存量"], errors='coerce').fillna(0).astype(int)
         
@@ -229,17 +235,15 @@ if page == "📦 材料庫存管理":
         
         st.markdown("---")
         
-        # 1. 安全庫存警報區（精準觸發）
         if not low_stock_df.empty:
             st.error("⚠️ **【安全庫存警報】以下材料庫存已低於警戒線，請及時補貨！**")
             st.dataframe(low_stock_df[["材料編號", "材料名稱", "分類", "目前庫存", "安全庫存量", "單位"]], use_container_width=True)
 
-        # 2. 無條件顯示：匯出 CSV 按鈕
         col_ex1, col_ex2 = st.columns([1, 4])
         with col_ex1:
             csv_data = df_mat.to_csv(index=False, encoding='utf-8-sig')
             st.download_button(
-                label="📥 匯出完整庫存清單 (CSV)",
+                label="📥 匯出完整材料庫存清單 (CSV)",
                 data=csv_data,
                 file_name=f"材料庫存總表_{datetime.now().strftime('%Y%m%d')}.csv",
                 mime="text/csv"
@@ -252,14 +256,12 @@ if page == "📦 材料庫存管理":
         
         st.subheader("🔄 庫存異動與資料編輯面板")
         
-        # 3. 無條件顯示：6 個控制頁籤（包含 📤 批次匯入 CSV）
-        tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
+        tab1, tab2, tab3, tab4, tab5 = st.tabs([
             "📤 師傅領料登記", 
             "📥 進貨入庫登記", 
             "➕ 新增材料品項", 
             "✏️ 修改/編輯材料資料", 
-            "🗑️ 刪除材料品項", 
-            "📤 批次匯入 CSV"
+            "🗑️ 刪除材料品項"
         ])
         
         with tab1:
@@ -392,53 +394,8 @@ if page == "📦 材料庫存管理":
                     else:
                         st.error("❌ 請先勾選上方「我確定要刪除...」核取方塊！")
 
-        with tab6:
-            st.subheader("📤 批次匯入材料 CSV 檔案")
-            st.caption("請上傳符合格式的 CSV 檔案，將自動追加或覆蓋至雲端資料庫。")
-            
-            uploaded_file = st.file_uploader("選擇要上傳的材料 CSV 檔", type=["csv"])
-            
-            if uploaded_file is not None:
-                try:
-                    import_df = pd.read_csv(uploaded_file)
-                    st.write("📋 預覽即將匯入的資料：")
-                    st.dataframe(import_df, use_container_width=True)
-                    
-                    import_mode = st.radio("請選擇匯入模式：", ["追加至現有資料庫底部", "完全覆蓋現有資料庫 (請謹慎使用)"])
-                    
-                    if st.button("🚀 確認執行匯入"):
-                        required_cols = ["材料名稱", "分類", "目前庫存", "安全庫存量", "單位"]
-                        missing_cols = [c for c in required_cols if c not in import_df.columns]
-                        
-                        if missing_cols:
-                            st.error(f"❌ 上傳的 CSV 缺少必要的欄位：{missing_cols}，請修正後重試！")
-                        else:
-                            if "規格/尺寸" not in import_df.columns:
-                                import_df["規格/尺寸"] = "無"
-                                
-                            if import_mode == "完全覆蓋現有資料庫 (請謹慎使用)":
-                                if "材料編號" not in import_df.columns:
-                                    import_df["材料編號"] = [f"M{i+1:03d}" for i in range(len(import_df))]
-                                final_df = import_df
-                            else:
-                                start_id = len(df_mat) + 1
-                                if "材料編號" not in import_df.columns:
-                                    import_df["材料編號"] = [f"M{i+start_id:03d}" for i in range(len(import_df))]
-                                final_df = pd.concat([df_mat, import_df], ignore_index=True)
-                            
-                            cols_order = ["材料編號", "材料名稱", "規格/尺寸", "分類", "目前庫存", "安全庫存量", "單位"]
-                            final_df = final_df[cols_order]
-                            
-                            save_data(sheet_mat, final_df)
-                            add_log_gsheet("批次匯入", uploaded_file.name, f"匯入 {len(import_df)} 筆資料", f"模式: {import_mode}")
-                            st.success(f"🎉 成功匯入 {len(import_df)} 筆材料資料至 Google Sheets！")
-                            st.rerun()
-                            
-                except Exception as e:
-                    st.error(f"❌ 讀取 CSV 檔案失敗，請確認檔案編碼是否為 UTF-8！錯誤資訊：{e}")
-
 # -------------------------------------------------------------------
-# 分頁 2：工具資產追蹤 (含維修/保養流程)
+# 分頁 2：工具資產追蹤
 # -------------------------------------------------------------------
 elif page == "🔨 工具資產追蹤":
     st.header("🔨 固定資產與高價工具借還與維修追蹤")
@@ -663,7 +620,119 @@ elif page == "🔨 工具資產追蹤":
                         st.error("❌ 請先勾選上方「我確定要報銷刪除...」核取方塊！")
 
 # -------------------------------------------------------------------
-# 分頁 3：數據分析儀表板
+# 分頁 3：📤 CSV 批次匯入（獨立核心功能頁面）
+# -------------------------------------------------------------------
+elif page == "📤 CSV 批次匯入":
+    st.header("📤 CSV 資料批次匯入中心")
+    st.caption("您可以透過上傳 CSV 檔案，一次性將大量【材料庫存】或【工具資產】同步寫入 Google Sheets 雲端資料庫。")
+    st.markdown("---")
+    
+    # 步驟 1：選擇目標類別
+    target_type = st.radio(
+        "📌 第一步：請選擇您要匯入的資料種類：",
+        ["📦 材料耗材 (materials)", "🔨 工具資產 (tools)"],
+        horizontal=True
+    )
+    
+    # 說明必填欄位格式
+    with st.expander("ℹ️ 點擊查看 CSV 欄位格式建議說明"):
+        if "材料" in target_type:
+            st.markdown("""
+            * **必須包含的欄位**：`材料名稱`、`分類`、`目前庫存`、`安全庫存量`、`單位`
+            * **可選欄位**：`材料編號`（若無將自動生成，如 M001）、`規格/尺寸`（若無預設為 '無'）
+            """)
+        else:
+            st.markdown("""
+            * **必須包含的欄位**：`工具名稱`、`分類`
+            * **可選欄位**：`工具編號`（若無自動生成）、`品牌/廠牌`、`型號`、`狀態`（預設為 '在庫'）、`當前借用人`（預設 '無'）、`借出日期`（預設 '無'）
+            """)
+            
+    st.markdown("---")
+    
+    # 步驟 2：上傳 CSV 檔案
+    uploaded_file = st.file_uploader("📂 第二步：選擇要上傳的 CSV 檔案 (UTF-8 編碼)", type=["csv"])
+    
+    if uploaded_file is not None:
+        try:
+            import_df = pd.read_csv(uploaded_file)
+            st.subheader("📋 預覽檔案內容 (前 10 筆)")
+            st.dataframe(import_df.head(10), use_container_width=True)
+            
+            import_mode = st.radio(
+                "🔄 第三步：請選擇匯入模式：",
+                ["追加至現有資料庫底部 (推薦)", "完全覆蓋現有資料庫 (⚠️ 警告：原雲端資料將被抹除)"]
+            )
+            
+            st.markdown("---")
+            
+            if st.button("🚀 確認開始批次匯入至雲端資料庫", type="primary"):
+                # --- A. 匯入材料邏輯 ---
+                if "材料" in target_type:
+                    df_mat, sheet_mat = load_data("materials")
+                    required_cols = ["材料名稱", "分類", "目前庫存", "安全庫存量", "單位"]
+                    missing_cols = [c for c in required_cols if c not in import_df.columns]
+                    
+                    if missing_cols:
+                        st.error(f"❌ 上傳失敗！CSV 檔案缺少以下必填欄位：{missing_cols}")
+                    else:
+                        if "規格/尺寸" not in import_df.columns:
+                            import_df["規格/尺寸"] = "無"
+                            
+                        if "完全覆蓋" in import_mode:
+                            if "材料編號" not in import_df.columns:
+                                import_df["材料編號"] = [f"M{i+1:03d}" for i in range(len(import_df))]
+                            final_df = import_df
+                        else:
+                            start_id = len(df_mat) + 1
+                            if "材料編號" not in import_df.columns:
+                                import_df["材料編號"] = [f"M{i+start_id:03d}" for i in range(len(import_df))]
+                            final_df = pd.concat([df_mat, import_df], ignore_index=True)
+                        
+                        cols_order = ["材料編號", "材料名稱", "規格/尺寸", "分類", "目前庫存", "安全庫存量", "單位"]
+                        final_df = final_df[cols_order]
+                        
+                        save_data(sheet_mat, final_df)
+                        add_log_gsheet("批次匯入", uploaded_file.name, f"匯入 {len(import_df)} 筆材料", f"模式: {import_mode}")
+                        st.success(f"🎉 成功匯入 {len(import_df)} 筆材料資料至 Google Sheets！請點擊側邊欄【📦 材料庫存管理】查看！")
+
+                # --- B. 匯入工具邏輯 ---
+                else:
+                    df_tools, sheet_tools = load_data("tools")
+                    required_cols = ["工具名稱", "分類"]
+                    missing_cols = [c for c in required_cols if c not in import_df.columns]
+                    
+                    if missing_cols:
+                        st.error(f"❌ 上傳失敗！CSV 檔案缺少以下必填欄位：{missing_cols}")
+                    else:
+                        # 自動補齊工具預設欄位
+                        if "品牌/廠牌" not in import_df.columns: import_df["品牌/廠牌"] = "無"
+                        if "型號" not in import_df.columns: import_df["型號"] = "無"
+                        if "狀態" not in import_df.columns: import_df["狀態"] = "在庫"
+                        if "當前借用人" not in import_df.columns: import_df["當前借用人"] = "無"
+                        if "借出日期" not in import_df.columns: import_df["借出日期"] = "無"
+                        
+                        if "完全覆蓋" in import_mode:
+                            if "工具編號" not in import_df.columns:
+                                import_df["工具編號"] = [f"T{i+1:03d}" for i in range(len(import_df))]
+                            final_df = import_df
+                        else:
+                            start_id = len(df_tools) + 1
+                            if "工具編號" not in import_df.columns:
+                                import_df["工具編號"] = [f"T{i+start_id:03d}" for i in range(len(import_df))]
+                            final_df = pd.concat([df_tools, import_df], ignore_index=True)
+                            
+                        cols_order = ["工具編號", "工具名稱", "品牌/廠牌", "型號", "分類", "狀態", "當前借用人", "借出日期"]
+                        final_df = final_df[cols_order]
+                        
+                        save_data(sheet_tools, final_df)
+                        add_log_gsheet("批次匯入工具", uploaded_file.name, f"匯入 {len(import_df)} 件工具", f"模式: {import_mode}")
+                        st.success(f"🎉 成功匯入 {len(import_df)} 件工具資產至 Google Sheets！請點擊側邊欄【🔨 工具資產追蹤】查看！")
+                        
+        except Exception as e:
+            st.error(f"❌ 讀取 CSV 檔案失敗，請確認檔案是否為標準 CSV 格式及 UTF-8 編碼！錯誤資訊：{e}")
+
+# -------------------------------------------------------------------
+# 分頁 4：數據分析儀表板
 # -------------------------------------------------------------------
 elif page == "📊 數據分析儀表板":
     st.header("📊 後台數據分析與決策儀表板")
@@ -704,7 +773,7 @@ elif page == "📊 數據分析儀表板":
                 st.write("尚無工具借出或送修數據。")
 
 # -------------------------------------------------------------------
-# 分頁 4：歷史異動紀錄
+# 分頁 5：歷史異動紀錄
 # -------------------------------------------------------------------
 elif page == "📜 歷史異動紀錄":
     st.header("📜 系統完整流水帳歷程 (Google Sheets 即時同步)")
@@ -748,7 +817,7 @@ elif page == "📜 歷史異動紀錄":
         st.dataframe(filtered_logs.sort_index(ascending=False), use_container_width=True)
 
 # -------------------------------------------------------------------
-# 分頁 5：⚙️ 管理員安全後台
+# 分頁 6：⚙️ 管理員安全後台
 # -------------------------------------------------------------------
 elif page == "⚙️ 管理員安全後台":
     st.header("⚙️ 倉管系統管理員專屬後台")
