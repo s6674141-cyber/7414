@@ -118,27 +118,36 @@ def undo_last_log():
             save_data(sheet_mat, df_mat)
 
     # 3. 撤銷「刪除品項」(精準還原分類、數量、安全存量、單位)
+    # 3. 撤銷「刪除品項」(精準還原規格、分類、數量、安全存量、單位)
     elif action_type == "刪除品項":
         df_mat, sheet_mat = load_data("materials")
         if item_name not in df_mat["材料名稱"].astype(str).values:
             new_id = f"M{len(df_mat) + 1:03d}"
             
-            # 從 note 解析備份資訊: "分類:電線類 | 庫存:100 | 安全量:10 | 單位:捲"
-            cat = "未分類"
-            qty = 0
-            safe_qty = 5
-            unit = "個"
-            
+            cat, spec, qty, safe_qty, unit = "未分類", "無", 0, 5, "個"
             if "分類:" in note:
                 try:
                     parts = note.split(" | ")
                     for p in parts:
                         if p.startswith("分類:"): cat = p.replace("分類:", "")
+                        elif p.startswith("規格:"): spec = p.replace("規格:", "")
                         elif p.startswith("庫存:"): qty = int(p.replace("庫存:", ""))
                         elif p.startswith("安全量:"): safe_qty = int(p.replace("安全量:", ""))
                         elif p.startswith("單位:"): unit = p.replace("單位:", "")
                 except:
                     pass
+            
+            new_row = {
+                "材料編號": new_id, 
+                "材料名稱": item_name,
+                "規格/尺寸": spec,
+                "分類": cat, 
+                "目前庫存": qty, 
+                "安全庫存量": safe_qty, 
+                "單位": unit
+            }
+            df_mat = pd.concat([df_mat, pd.DataFrame([new_row])], ignore_index=True)
+            save_data(sheet_mat, df_mat)
             
             new_row = {
                 "材料編號": new_id, 
@@ -232,6 +241,15 @@ if page == "📦 材料庫存管理":
         if not low_stock_df.empty:
             st.error("⚠️ **【安全庫存警報】以下材料庫存已低於警戒線，請及時補貨！**")
             st.dataframe(low_stock_df[["材料編號", "材料名稱", "分類", "目前庫存", "安全庫存量", "單位"]], use_container_width=True)
+            
+            # 🆕 一鍵匯出採購建議 CSV
+            csv_data = low_stock_df[["材料編號", "材料名稱", "分類", "目前庫存", "安全庫存量", "單位"]].to_csv(index=False, encoding='utf-8-sig')
+            st.download_button(
+                label="📥 匯出低庫存採購清單 (CSV)",
+                data=csv_data,
+                file_name=f"採購建議清單_{datetime.now().strftime('%Y%m%d')}.csv",
+                mime="text/csv"
+            )
 
         st.subheader("📋 當前材料庫存總覽")
         st.dataframe(df_mat, use_container_width=True)
@@ -283,10 +301,11 @@ if page == "📦 材料庫存管理":
                     st.success(f"✅ 成功補貨 [{mat_name}] {in_qty} {unit}！已同步存入 Google Sheets！")
                     st.rerun()
 
-        with tab3:
+       with tab3:
             with st.form("new_material_form"):
-                new_name = st.text_input("材料名稱 (例如: 3/4 PVC彎頭)")
-                new_cat = st.text_input("分類 (例如: 管路類)")
+                new_name = st.text_input("材料名稱 (例如: 單芯電線)")
+                new_spec = st.text_input("規格/尺寸 (例如: 2.0mm / 3/4吋)")
+                new_cat = st.text_input("分類 (例如: 電線類)")
                 init_qty = st.number_input("初始庫存數量", min_value=0, step=1)
                 safe_qty = st.number_input("安全庫存警戒門檻", min_value=1, step=1)
                 unit_str = st.text_input("計算單位 (例如: 個/支/捲)")
@@ -294,11 +313,19 @@ if page == "📦 材料庫存管理":
                 
                 if submit_new and new_name:
                     new_id = f"M{len(df_mat) + 1:03d}"
-                    new_row = {"材料編號": new_id, "材料名稱": new_name, "分類": new_cat, "目前庫存": init_qty, "安全庫存量": safe_qty, "單位": unit_str}
+                    new_row = {
+                        "材料編號": new_id, 
+                        "材料名稱": new_name, 
+                        "規格/尺寸": new_spec if new_spec else "無",
+                        "分類": new_cat, 
+                        "目前庫存": init_qty, 
+                        "安全庫存量": safe_qty, 
+                        "單位": unit_str
+                    }
                     df_mat = pd.concat([df_mat, pd.DataFrame([new_row])], ignore_index=True)
                     save_data(sheet_mat, df_mat)
-                    add_log_gsheet("新增品項", new_name, f"+{init_qty}{unit_str}", f"分類:{new_cat} | 庫存:{init_qty} | 安全量:{safe_qty} | 單位:{unit_str}")
-                    st.success(f"✅ 成功新增品項：[{new_id}] {new_name}！")
+                    add_log_gsheet("新增品項", f"{new_name} ({new_spec})", f"+{init_qty}{unit_str}", f"規格:{new_spec} | 分類:{new_cat} | 庫存:{init_qty} | 安全量:{safe_qty} | 單位:{unit_str}")
+                    st.success(f"✅ 成功新增品項：[{new_id}] {new_name} - {new_spec}！")
                     st.rerun()
 
         with tab4:
@@ -355,7 +382,8 @@ if page == "📦 材料庫存管理":
                         df_mat = df_mat.drop(m_del_idx).reset_index(drop=True)
                         save_data(sheet_mat, df_mat)
                         # 將刪除前的數據打包備份在 Note 裡面！
-                        backup_note = f"分類:{del_cat} | 庫存:{del_qty} | 安全量:{del_safe} | 單位:{del_unit}"
+                        del_spec = df_mat.loc[m_del_idx, "規格/尺寸"] if "規格/尺寸" in df_mat.columns else "無"
+                        backup_note = f"規格:{del_spec} | 分類:{del_cat} | 庫存:{del_qty} | 安全量:{del_safe} | 單位:{del_unit}"
                         add_log_gsheet("刪除品項", del_m_name, "材料刪除", backup_note)
                         st.success(f"✅ 成功刪除材料：[{del_m_name}]！")
                         st.rerun()
@@ -402,7 +430,33 @@ elif page == "🔨 工具資產追蹤":
         st.markdown("---")
         
         tab_tb, tab_tr, tab_maint, tab_te, tab_td = st.tabs(["📤 登記工具借出", "📥 登記工具歸還", "🔧 損壞報修 / 維修完成", "✏️ 修改/編輯工具", "🗑️ 報銷刪除工具"])
+        # 如果需要新增工具功能
         
+        with st.form("new_tool_form"):
+            t_name = st.text_input("工具名稱 (例如: 充電式衝擊起子機)")
+            t_brand = st.text_input("品牌/廠牌 (例如: 牧田 Makita)")
+            t_model = st.text_input("型號 (例如: DTD172)")
+            t_cat = st.text_input("分類 (例如: 電動工具)")
+            submit_new_t = st.form_submit_button("確認新增工具建檔")
+            
+            if submit_new_t and t_name:
+                new_t_id = f"T{len(df_tools) + 1:03d}"
+                new_tool_row = {
+                    "工具編號": new_t_id,
+                    "工具名稱": t_name,
+                    "品牌/廠牌": t_brand if t_brand else "無",
+                    "型號": t_model if t_model else "無",
+                    "分類": t_cat if t_cat else "通用",
+                    "狀態": "在庫",
+                    "當前借用人": "無",
+                    "借出日期": "無"
+                }
+                df_tools = pd.concat([df_tools, pd.DataFrame([new_tool_row])], ignore_index=True)
+                save_data(sheet_tools, df_tools)
+                add_log_gsheet("新增工具", t_name, f"品牌:{t_brand} | 型號:{t_model}", "新品工具建檔")
+                st.success(f"✅ 成功建檔工具：[{new_t_id}] {t_brand} {t_name} ({t_model})！")
+                st.rerun()
+                
         with tab_tb:
             in_stock_tools = df_tools[df_tools["狀態"] == "在庫"]
             if not in_stock_tools.empty:
@@ -499,20 +553,26 @@ elif page == "🔨 工具資產追蹤":
                     st.success("🎉 目前沒有正在維修中的工具！")
 
         with tab_te:
-            st.subheader("✏️ 修改工具編號、名稱或所屬類別")
+            st.subheader("✏️ 修改/編輯既有工具資料")
             selected_edit_tool = st.selectbox("選擇要修改的工具", df_tools["工具編號"].astype(str) + " - " + df_tools["工具名稱"], key="edit_tool_sel")
             
             if selected_edit_tool:
                 edit_t_id = selected_edit_tool.split(" - ")[0]
                 t_idx = df_tools[df_tools["工具編號"].astype(str) == edit_t_id].index[0]
                 
+                # 取得原有欄位數值（若原本無該欄位則帶入預設值）
+                curr_brand = df_tools.loc[t_idx, "品牌/廠牌"] if "品牌/廠牌" in df_tools.columns else "無"
+                curr_model = df_tools.loc[t_idx, "型號"] if "型號" in df_tools.columns else "無"
+                
                 with st.form("edit_tool_form"):
                     col_te1, col_te2 = st.columns(2)
                     with col_te1:
                         edit_tool_id = st.text_input("工具編號", value=df_tools.loc[t_idx, "工具編號"])
                         edit_tool_name = st.text_input("工具名稱", value=df_tools.loc[t_idx, "工具名稱"])
+                        edit_brand = st.text_input("品牌/廠牌 (例: BOSCH / Makita)", value=str(curr_brand))
                     with col_te2:
-                        edit_tool_cat = st.text_input("分類名稱 (例如: 照明工具 (F))", value=df_tools.loc[t_idx, "分類"])
+                        edit_model = st.text_input("型號 (例: GBH 2-28)", value=str(curr_model))
+                        edit_tool_cat = st.text_input("分類名稱 (例: 電動工具)", value=df_tools.loc[t_idx, "分類"])
                         
                     submit_edit_tool = st.form_submit_button("💾 儲存修改內容")
                     
@@ -520,6 +580,8 @@ elif page == "🔨 工具資產追蹤":
                         old_t_name = df_tools.loc[t_idx, "工具名稱"]
                         df_tools.loc[t_idx, "工具編號"] = edit_tool_id
                         df_tools.loc[t_idx, "工具名稱"] = edit_tool_name
+                        df_tools.loc[t_idx, "品牌/廠牌"] = edit_brand
+                        df_tools.loc[t_idx, "型號"] = edit_model
                         df_tools.loc[t_idx, "分類"] = edit_tool_cat
                         
                         save_data(sheet_tools, df_tools)
@@ -615,8 +677,26 @@ elif page == "📜 歷史異動紀錄":
                     st.error(msg)
         
         st.markdown("---")
-        st.subheader("📋 完整歷史流水帳明細")
-        st.dataframe(df_logs.sort_index(ascending=False), use_container_width=True)
+        st.subheader("📋 歷史流水帳搜尋與明細")
+        
+        # 🆕 新增搜尋與篩選控制列
+        col_s1, col_s2 = st.columns([2, 1])
+        with col_s1:
+            search_term = st.text_input("🔍 搜尋關鍵字 (項目名稱 / 師傅姓名 / 備註)")
+        with col_s2:
+            type_filter = st.selectbox("📌 依類型篩選", ["全部類型"] + list(df_logs["類型"].unique()))
+            
+        filtered_logs = df_logs.copy()
+        if search_term:
+            filtered_logs = filtered_logs[
+                filtered_logs["項目名稱"].astype(str).str.contains(search_term, case=False, na=False) |
+                filtered_logs["變動數量/借用人"].astype(str).str.contains(search_term, case=False, na=False) |
+                filtered_logs["備註"].astype(str).str.contains(search_term, case=False, na=False)
+            ]
+        if type_filter != "全部類型":
+            filtered_logs = filtered_logs[filtered_logs["類型"] == type_filter]
+            
+        st.dataframe(filtered_logs.sort_index(ascending=False), use_container_width=True)
 
 # -------------------------------------------------------------------
 # 分頁 5：⚙️ 管理員安全後台
