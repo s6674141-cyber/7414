@@ -640,104 +640,148 @@ elif page == "📤 CSV 批次資料匯入" and st.session_state.is_admin:
 # -------------------------------------------------------------------
 # 分頁 F：📊 經營決策儀表板 (Plotly 高階商業視覺版)
 # -------------------------------------------------------------------
+# -------------------------------------------------------------------
+# 分頁 F：📊 BI 商業智慧經營決策中心 (高級決策建議版)
+# -------------------------------------------------------------------
 elif page == "📊 經營決策儀表板" and st.session_state.is_admin:
-    import plotly.express as px  # 自動載入高效能圖表套件
+    import plotly.express as px
+    import plotly.graph_objects as go
     
-    st.title("📊 數據分析與經營決策中心")
-    st.caption("透過歷史異動數據，精準掌握工程案耗材支出與設備損耗狀況")
+    st.title("📊 BI 商業智慧經營決策中心")
+    st.caption("結合歷史營運數據與商業分析模型，提供採購、調度與資產淘汰之決策建議")
     st.markdown("---")
     
     df_logs, _ = load_data("logs")
+    df_mat, _ = load_data("materials")
+    df_tools, _ = load_data("tools")
     
     if not df_logs.empty:
-        usage_logs = df_logs[df_logs["類型"] == "領料出庫"]
-        repair_logs = df_logs[df_logs["類型"] == "工具送修"]
+        usage_logs = df_logs[df_logs["類型"] == "領料出庫"].copy()
+        repair_logs = df_logs[df_logs["類型"] == "工具送修"].copy()
+        borrow_logs = df_logs[df_logs["類型"] == "工具借出"].copy()
         
-        # 頂部 KPI 數據統計卡片
-        col_kpi1, col_kpi2, col_kpi3 = st.columns(3)
-        col_kpi1.metric("累積領料出庫", f"{len(usage_logs)} 次")
-        col_kpi2.metric("累積工具借出", f"{len(df_logs[df_logs['類型'] == '工具借出'])} 次")
-        col_kpi3.metric("⚠️ 設備報修次數", f"{len(repair_logs)} 次", delta_color="inverse")
+        # ---------------------------------------------------------------
+        # 1. 核心 KPI 決策指標卡片
+        # ---------------------------------------------------------------
+        k1, k2, k3, k4 = st.columns(4)
+        k1.metric("📦 總領料總次數", f"{len(usage_logs)} 次")
+        k2.metric("🔨 工具流轉次數", f"{len(borrow_logs)} 次")
+        
+        # 計算工具維修率
+        repair_rate = (len(repair_logs) / len(df_tools) * 100) if not df_tools.empty else 0
+        k3.metric("⚠️ 設備報修率", f"{repair_rate:.1f}%", f"{len(repair_logs)} 件送修", delta_color="inverse")
+        
+        # 安全庫存警戒數
+        if not df_mat.empty:
+            df_mat["目前庫存"] = pd.to_numeric(df_mat["Currently Stock"] if "Currently Stock" in df_mat.columns else df_mat["目前庫存"], errors='coerce').fillna(0)
+            df_mat["安全庫存量"] = pd.to_numeric(df_mat["Safety Stock"] if "Safety Stock" in df_mat.columns else df_mat["安全庫存量"], errors='coerce').fillna(0)
+            low_stock_count = len(df_mat[df_mat["目前庫存"] <= df_mat["安全庫存量"]])
+        else:
+            low_stock_count = 0
+            
+        k4.metric("🚨 待補貨缺料品項", f"{low_stock_count} 項", "建議立即採購" if low_stock_count > 0 else "庫存充足", delta_color="inverse")
         
         st.markdown("<br>", unsafe_allow_html=True)
         
+        # ---------------------------------------------------------------
+        # 2. 圖表第一排：工程案耗材分析 vs 高頻維修警報 (現有升級版)
+        # ---------------------------------------------------------------
         col1, col2 = st.columns(2)
         
-        # 📊 圖表 1：各工程案耗材領用分佈 (水平漸層長條圖)
         with col1:
-            st.markdown("##### 🏗️ 各工程案耗材領用頻率排行榜")
+            st.markdown("##### 🏗️ 各工程案耗材領用排行榜")
             if not usage_logs.empty:
-                # 解析工程名稱
-                usage_logs_copy = usage_logs.copy()
-                usage_logs_copy["工程案"] = usage_logs_copy["備註"].apply(
-                    lambda x: str(x).split("-")[0].strip() if "-" in str(x) else "未分類工程"
-                )
-                proj_df = usage_logs_copy["工程案"].value_counts().reset_index()
+                usage_logs["工程案"] = usage_logs["備註"].apply(lambda x: str(x).split("-")[0].strip() if "-" in str(x) else "未分類工程")
+                proj_df = usage_logs["工程案"].value_counts().reset_index()
                 proj_df.columns = ["工程案名稱", "領料次數"]
                 
-                # Plotly 高質感水平長條圖
                 fig1 = px.bar(
-                    proj_df,
-                    x="領料次數",
-                    y="工程案名稱",
-                    orientation='h',
-                    text="領料次數",
-                    color="領料次數",
-                    color_continuous_scale="Blues"
+                    proj_df, x="領料次數", y="工程案名稱", orientation='h',
+                    text="領料次數", color="領料次數", color_continuous_scale="Blues"
                 )
-                fig1.update_traces(
-                    textposition='outside', 
-                    marker_line_color='rgb(8,48,107)',
-                    marker_line_width=1,
-                    opacity=0.85
-                )
-                fig1.update_layout(
-                    yaxis={'categoryorder':'total ascending', 'title': ''},
-                    xaxis={'title': '領料總次數'},
-                    coloraxis_showscale=False,
-                    margin=dict(l=10, r=30, t=20, b=20),
-                    height=320,
-                    paper_bgcolor='rgba(0,0,0,0)',
-                    plot_bgcolor='rgba(0,0,0,0)'
-                )
+                fig1.update_traces(textposition='outside')
+                fig1.update_layout(yaxis={'categoryorder':'total ascending', 'title':''}, coloraxis_showscale=False, height=300, margin=dict(l=10, r=30, t=10, b=10))
                 st.plotly_chart(fig1, use_container_width=True)
+                
+                # 💡 BI 決策建議
+                top_proj = proj_df.iloc[0]["工程案名稱"] if not proj_df.empty else ""
+                st.info(f"💡 **BI 專案建議**：【{top_proj}】為當前材料消耗最高之工地。建議 PM 查核該工程實際進度是否與領料量吻合，防範材料超領或漏報。")
             else:
-                st.info("尚無工程領料紀錄。")
-
-        # 📊 圖表 2：高頻損壞 / 送修工具警報 (警告紅漸層圖)
+                st.info("尚無領料數據。")
+                
         with col2:
-            st.markdown("##### 🚨 高頻損壞 / 送修工具警報")
+            st.markdown("##### 🚨 高頻損壞 / 設備報修警報")
             if not repair_logs.empty:
                 repair_df = repair_logs["項目名稱"].value_counts().reset_index()
                 repair_df.columns = ["工具名稱", "送修次數"]
                 
                 fig2 = px.bar(
-                    repair_df,
-                    x="送修次數",
-                    y="工具名稱",
-                    orientation='h',
-                    text="送修次數",
-                    color="送修次數",
-                    color_continuous_scale="Reds"
+                    repair_df, x="送修次數", y="工具名稱", orientation='h',
+                    text="送修次數", color="送修次數", color_continuous_scale="Reds"
                 )
-                fig2.update_traces(
-                    textposition='outside',
-                    marker_line_color='rgb(139,0,0)',
-                    marker_line_width=1,
-                    opacity=0.85
-                )
-                fig2.update_layout(
-                    yaxis={'categoryorder':'total ascending', 'title': ''},
-                    xaxis={'title': '累積送修次數'},
-                    coloraxis_showscale=False,
-                    margin=dict(l=10, r=30, t=20, b=20),
-                    height=320,
-                    paper_bgcolor='rgba(0,0,0,0)',
-                    plot_bgcolor='rgba(0,0,0,0)'
-                )
+                fig2.update_traces(textposition='outside')
+                fig2.update_layout(yaxis={'categoryorder':'total ascending', 'title':''}, coloraxis_showscale=False, height=300, margin=dict(l=10, r=30, t=10, b=10))
                 st.plotly_chart(fig2, use_container_width=True)
+                
+                # 💡 BI 決策建議
+                worst_tool = repair_df.iloc[0]["工具名稱"] if not repair_df.empty else ""
+                worst_count = repair_df.iloc[0]["送修次數"] if not repair_df.empty else 0
+                if worst_count >= 3:
+                    st.error(f"💡 **BI 淘汰建議**：【{worst_tool}】累積送修已達 {worst_count} 次，維修成本過高。建議直接辦理**資產報廢**並採購全新機種。")
+                else:
+                    st.warning(f"💡 **BI 保養建議**：【{worst_tool}】故障頻率偏高，建議排定定期碳刷與齒輪箱保養。")
             else:
                 st.success("🎉 目前設備狀況良好，無任何故障送修紀錄！")
+
+        st.markdown("---")
+        
+        # ---------------------------------------------------------------
+        # 3. 圖表第二排：新增 BI 高級分析 (領料趨勢與工具外借滯留)
+        # ---------------------------------------------------------------
+        col3, col4 = st.columns(2)
+        
+        with col3:
+            st.markdown("##### 📈 領料趨勢與季節性資產動向")
+            if not usage_logs.empty and "時間" in usage_logs.columns:
+                try:
+                    usage_logs["日期"] = pd.to_datetime(usage_logs["時間"]).dt.date
+                    trend_df = usage_logs.groupby("日期").size().reset_index(name="領料筆數")
+                    
+                    fig3 = px.line(trend_df, x="日期", y="領料筆數", markers=True, line_shape="spline")
+                    fig3.update_traces(line_color="#2563EB", line_width=3)
+                    fig3.update_layout(height=280, margin=dict(l=10, r=20, t=10, b=10), xaxis_title="", yaxis_title="每日領料數")
+                    st.plotly_chart(fig3, use_container_width=True)
+                    
+                    st.caption("💡 **BI 營運洞察**：觀察領料峰值日期，可作為未來同類型工程進場前預先採購備料之依據。")
+                except:
+                    st.info("時間格式解析中，無法繪製趨勢圖。")
+            else:
+                st.info("尚無時間序列數據。")
+
+        with col4:
+            st.markdown("##### ⏳ 外借工具超期滞留警報 (> 7 天未歸還)")
+            if not df_tools.empty:
+                borrowed_tools = df_tools[df_tools["狀態"] == "借出"].copy()
+                if not borrowed_tools.empty and "借出日期" in borrowed_tools.columns:
+                    today = pd.to_datetime("today").date()
+                    borrowed_tools["借出天數"] = borrowed_tools["借出日期"].apply(
+                        lambda x: (today - pd.to_datetime(x).date()).days if str(x) != "無" and pd.notnull(x) else 0
+                    )
+                    overdue_tools = borrowed_tools[borrowed_tools["借出天數"] >= 7]
+                    
+                    if not overdue_tools.empty:
+                        st.dataframe(
+                            overdue_tools[["工具編號", "工具名稱", "當前借用人", "借出日期", "借出天數"]],
+                            use_container_width=True
+                        )
+                        st.warning("💡 **BI 調度建議**：以上工具外借超過 7 天，請倉管人員一鍵發送催還通知，防止機具於工地閒置或丟失。")
+                    else:
+                        st.success("🎉 當前所有外借工具均在正常借期 (7天內)，調度狀況良好！")
+                else:
+                    st.info("目前沒有外借中的工具。")
+            else:
+                st.info("無工具資料。")
+
     else:
         st.info("目前雲端流水帳尚無異動紀錄，請執行領料或借還操作後查看。")
 
