@@ -7,8 +7,7 @@ from google.oauth2.service_account import Credentials
 import re
 import plotly.express as px
 import plotly.graph_objects as go
-from google import genai
-
+from openai import OpenAI
 # -------------------------------------------------------------------
 # 0. 頁面基本設定 (預設展開側邊欄)
 # -------------------------------------------------------------------
@@ -235,41 +234,48 @@ else:
 page = st.sidebar.radio("系統導覽：", menu_options, label_visibility="collapsed")
 
 # -------------------------------------------------------------------
-# 分頁 AI：🤖 AI 經營決策助理 (自動搜尋可用模型版)
+# 分頁 AI：🤖 AI 經營決策助理 (OpenAI GPT-4o-mini 版)
 # -------------------------------------------------------------------
 if page == "🤖 AI 經營決策助理" and st.session_state.is_admin:
     st.title("🤖 老闆專屬 AI 經營決策助理")
-    st.caption("基於全公司實體倉管、專案預算與流水帳數據的即時 AI 決策諮詢")
+    st.caption("基於全公司實體倉管、專案預算與流水帳數據的即時 AI 決策諮詢 (Powered by OpenAI GPT-4o-mini)")
     st.markdown("---")
     
-    if "GEMINI_API_KEY" not in st.secrets:
-        st.error("⚠️ 未在 Secrets 中找到 `GEMINI_API_KEY`，請完成設定以啟用 AI 助理。")
+    # 檢查是否設定 OPENAI_API_KEY
+    if "OPENAI_API_KEY" not in st.secrets:
+        st.error("⚠️ 未在 Secrets 中找到 `OPENAI_API_KEY`，請完成設定以啟用 AI 助理。")
     else:
-        api_key = st.secrets["GEMINI_API_KEY"].strip()
-        client = genai.Client(api_key=api_key)
+        api_key = st.secrets["OPENAI_API_KEY"].strip()
+        client = OpenAI(api_key=api_key)
         
+        # 初始化聊天歷史
         if "chat_messages" not in st.session_state:
             st.session_state.chat_messages = [
                 {"role": "assistant", "content": "老闆您好！我是您的 AI 經營決策助理。您可以問我任何關於專案材料預算消化率、高價值耗材領用情況、工具設備維修 TCO 評估，或是 2025 全年金流趨勢的問題，我會為您做精準分析！"}
             ]
             
+        # 展示歷史訊息
         for msg in st.session_state.chat_messages:
             with st.chat_message(msg["role"]):
                 st.markdown(msg["content"])
                 
+        # 使用者輸入框
         if prompt := st.chat_input("請輸入您想詢問的經營數據問題 (例如: 高價值耗材領用情況)"):
             st.session_state.chat_messages.append({"role": "user", "content": prompt})
             with st.chat_message("user"):
                 st.markdown(prompt)
                 
+            # 準備向 AI 傳送 Prompt
             with st.chat_message("assistant"):
                 with st.spinner("🤖 AI 正在讀取並分析公司資料庫中..."):
                     try:
+                        # 1. 抓取最新數據快照
                         df_logs, _ = load_data("logs")
                         df_mat, _ = load_data("materials")
                         df_proj, _ = load_data("projects")
                         df_tools, _ = load_data("tools")
                         
+                        # 摘要數據
                         mat_summary = df_mat[["材料名稱", "目前庫存", "安全庫存量", "單價"]].head(50).to_string() if not df_mat.empty else "無"
                         proj_summary = df_proj.to_string() if not df_proj.empty else "無"
                         tools_summary = df_tools[["工具名稱", "品牌/廠牌", "型號", "新機購入單價", "狀態"]].head(40).to_string() if not df_tools.empty else "無"
@@ -290,38 +296,24 @@ if page == "🤖 AI 經營決策助理" and st.session_state.is_admin:
 
                         【4. 歷史流水帳摘要 (最近40筆)】:
                         {logs_sample}
-
-                        老闆問題: {prompt}
                         """
                         
-                        # 🔍 動態尋找你這把 API Key 真正可用的 Model 名稱
-                        usable_model = None
-                        try:
-                            models_list = list(client.models.list())
-                            for m in models_list:
-                                if "generateContent" in getattr(m, "supported_generation_methods", []):
-                                    usable_model = m.name
-                                    # 優先挑選 flash 模型
-                                    if "flash" in m.name:
-                                        break
-                        except Exception:
-                            usable_model = "gemini-1.5-flash"
-                        
-                        if not usable_model:
-                            usable_model = "gemini-1.5-flash"
-                            
-                        # 執行生成
-                        response = client.models.generate_content(
-                            model=usable_model,
-                            contents=system_prompt,
+                        # 2. 呼叫 OpenAI GPT-4o-mini 模型
+                        response = client.chat.completions.create(
+                            model="gpt-4o-mini",
+                            messages=[
+                                {"role": "system", "content": system_prompt},
+                                {"role": "user", "content": prompt}
+                            ],
+                            temperature=0.3
                         )
                         
-                        ai_reply = response.text
+                        ai_reply = response.choices[0].message.content
+                        
                         st.markdown(ai_reply)
                         st.session_state.chat_messages.append({"role": "assistant", "content": ai_reply})
                     except Exception as e:
                         st.error(f"❌ AI 分析失敗：{e}")
-
 # -------------------------------------------------------------------
 # 分頁 A：📦 材料領用與進貨 (一般員工)
 # -------------------------------------------------------------------
