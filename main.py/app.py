@@ -235,7 +235,7 @@ else:
 page = st.sidebar.radio("系統導覽：", menu_options, label_visibility="collapsed")
 
 # -------------------------------------------------------------------
-# 分頁 AI：🤖 AI 經營決策助理 (老闆專屬對話框 - 自動偵測模型修正版)
+# 分頁 AI：🤖 AI 經營決策助理 (配額優化與穩定版)
 # -------------------------------------------------------------------
 if page == "🤖 AI 經營決策助理" and st.session_state.is_admin:
     st.title("🤖 老闆專屬 AI 經營決策助理")
@@ -270,21 +270,21 @@ if page == "🤖 AI 經營決策助理" and st.session_state.is_admin:
             with st.chat_message("assistant"):
                 with st.spinner("🤖 AI 正在讀取並分析公司資料庫中..."):
                     try:
-                        # 1. 抓取最新數據快照
+                        # 1. 抓取最新數據快照 (適度精簡資料量以節省 Token 額度)
                         df_logs, _ = load_data("logs")
                         df_mat, _ = load_data("materials")
                         df_proj, _ = load_data("projects")
                         df_tools, _ = load_data("tools")
                         
-                        # 摘要數據供 Prompt 使用
-                        mat_summary = df_mat[["材料名稱", "目前庫存", "安全庫存量", "單價"]].to_string() if not df_mat.empty else "無"
+                        # 摘要數據 (各只取前/後精華部分)
+                        mat_summary = df_mat[["材料名稱", "目前庫存", "安全庫存量", "單價"]].head(50).to_string() if not df_mat.empty else "無"
                         proj_summary = df_proj.to_string() if not df_proj.empty else "無"
-                        tools_summary = df_tools[["工具名稱", "品牌/廠牌", "型號", "新機購入單價", "狀態"]].to_string() if not df_tools.empty else "無"
-                        logs_sample = df_logs.tail(100).to_string() if not df_logs.empty else "無"
+                        tools_summary = df_tools[["工具名稱", "品牌/廠牌", "型號", "新機購入單價", "狀態"]].head(40).to_string() if not df_tools.empty else "無"
+                        logs_sample = df_logs.tail(40).to_string() if not df_logs.empty else "無"
                         
                         system_prompt = f"""
                         你是一位專精於水電工程與倉管財務的 AI 經營顧問，正在為公司老闆解答經營疑難雜症。
-                        請根據以下提供的公司【實體最新資料庫快照】進行思考與回答。請保持專業、精準、口吻親切，並附帶具體的經營建議（例如：JIT採購、報廢新購、預算稽核）。
+                        請根據以下提供的公司【實體最新資料庫快照】進行思考與回答。請保持專業、精準、條理分明，並附帶具體的經營建議。
 
                         【1. 工程專案預算清單】:
                         {proj_summary}
@@ -295,41 +295,27 @@ if page == "🤖 AI 經營決策助理" and st.session_state.is_admin:
                         【3. 工具設備資產摘要】:
                         {tools_summary}
 
-                        【4. 歷史流水帳摘要 (最近100筆)】:
+                        【4. 歷史流水帳摘要 (最近40筆)】:
                         {logs_sample}
 
-                        使用者問題: {prompt}
+                        老闆問題: {prompt}
                         """
                         
-                        # 2. 自動尋找該 API Key 當前可用且支援 generateContent 的模型名稱
-                        available_models = [
-                            m.name for m in genai.list_models() 
-                            if 'generateContent' in m.supported_generation_methods
-                        ]
+                        # 2. 強制指定使用配額最高、最穩定的 gemini-1.5-flash
+                        try:
+                            model = genai.GenerativeModel('gemini-1.5-flash')
+                            response = model.generate_content(system_prompt)
+                        except Exception:
+                            # 備用指定格式
+                            model = genai.GenerativeModel('models/gemini-1.5-flash')
+                            response = model.generate_content(system_prompt)
                         
-                        target_model = None
-                        # 優先順序: 1.5-flash -> 1.5-pro -> 2.0-flash -> 列表中第一個可用模型
-                        for priority_name in ['gemini-1.5-flash', 'gemini-1.5-pro', 'gemini-2.0-flash', 'gemini-pro']:
-                            matched = [m for m in available_models if priority_name in m]
-                            if matched:
-                                target_model = matched[0]
-                                break
-                        
-                        if not target_model and available_models:
-                            target_model = available_models[0]
-                            
-                        if not target_model:
-                            raise Exception("找不到可用的 Gemini 生成模型，請確認 API Key 是否在 Google AI Studio 正確啟用。")
-                            
-                        # 3. 使用找到的最佳模型進行生成
-                        model = genai.GenerativeModel(target_model)
-                        response = model.generate_content(system_prompt)
                         ai_reply = response.text
                         
                         st.markdown(ai_reply)
                         st.session_state.chat_messages.append({"role": "assistant", "content": ai_reply})
                     except Exception as e:
-                        st.error(f"❌ AI 分析失敗，請確認 API Key 與連線狀態：{e}")
+                        st.error(f"❌ AI 分析失敗，請稍候再試：{e}")
 
 # -------------------------------------------------------------------
 # 分頁 A：📦 材料領用與進貨 (一般員工)
