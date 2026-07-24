@@ -235,7 +235,7 @@ else:
 page = st.sidebar.radio("系統導覽：", menu_options, label_visibility="collapsed")
 
 # -------------------------------------------------------------------
-# 分頁 AI：🤖 AI 經營決策助理 (配額優化與穩定版)
+# 分頁 AI：🤖 AI 經營決策助理 (鎖定 gemini-1.5-flash 穩定高額度版)
 # -------------------------------------------------------------------
 if page == "🤖 AI 經營決策助理" and st.session_state.is_admin:
     st.title("🤖 老闆專屬 AI 經營決策助理")
@@ -261,7 +261,7 @@ if page == "🤖 AI 經營決策助理" and st.session_state.is_admin:
                 st.markdown(msg["content"])
                 
         # 使用者輸入框
-        if prompt := st.chat_input("請輸入您想詢問的經營數據問題 (例如: 2025年哪一個工程案材料花最多錢？有超支嗎？)"):
+        if prompt := st.chat_input("請輸入您想詢問的經營數據問題 (例如: 高價值耗材領用情況)"):
             st.session_state.chat_messages.append({"role": "user", "content": prompt})
             with st.chat_message("user"):
                 st.markdown(prompt)
@@ -270,13 +270,13 @@ if page == "🤖 AI 經營決策助理" and st.session_state.is_admin:
             with st.chat_message("assistant"):
                 with st.spinner("🤖 AI 正在讀取並分析公司資料庫中..."):
                     try:
-                        # 1. 抓取最新數據快照 (適度精簡資料量以節省 Token 額度)
+                        # 1. 抓取最新數據快照
                         df_logs, _ = load_data("logs")
                         df_mat, _ = load_data("materials")
                         df_proj, _ = load_data("projects")
                         df_tools, _ = load_data("tools")
                         
-                        # 摘要數據 (各只取前/後精華部分)
+                        # 摘要數據 (控制在合理 Token 範圍內，維持穩定運作)
                         mat_summary = df_mat[["材料名稱", "目前庫存", "安全庫存量", "單價"]].head(50).to_string() if not df_mat.empty else "無"
                         proj_summary = df_proj.to_string() if not df_proj.empty else "無"
                         tools_summary = df_tools[["工具名稱", "品牌/廠牌", "型號", "新機購入單價", "狀態"]].head(40).to_string() if not df_tools.empty else "無"
@@ -301,14 +301,9 @@ if page == "🤖 AI 經營決策助理" and st.session_state.is_admin:
                         老闆問題: {prompt}
                         """
                         
-                        # 2. 強制指定使用配額最高、最穩定的 gemini-1.5-flash
-                        try:
-                            model = genai.GenerativeModel('gemini-1.5-flash')
-                            response = model.generate_content(system_prompt)
-                        except Exception:
-                            # 備用指定格式
-                            model = genai.GenerativeModel('models/gemini-1.5-flash')
-                            response = model.generate_content(system_prompt)
+                        # 2. 嚴格使用官方標準完整路徑 models/gemini-1.5-flash，兼具高額度與穩定性
+                        model = genai.GenerativeModel('models/gemini-1.5-flash')
+                        response = model.generate_content(system_prompt)
                         
                         ai_reply = response.text
                         
