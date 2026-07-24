@@ -8,8 +8,9 @@ import re
 import plotly.express as px
 import plotly.graph_objects as go
 from groq import Groq
+
 # -------------------------------------------------------------------
-# 0. 頁面基本設定 (預設展開側邊欄)
+# 0. 頁面基本設定 ( 預設展開側邊欄 )
 # -------------------------------------------------------------------
 plt.rcParams['font.sans-serif'] = ['Microsoft JhengHei', 'PingFang TC', 'Arial Unicode MS', 'DejaVu Sans']
 plt.rcParams['axes.unicode_minus'] = False
@@ -22,20 +23,23 @@ st.set_page_config(
 )
 
 # -------------------------------------------------------------------
-# 🎨 UI / CSS (v3.5 Full BI Edition 簡約質感深色風)
+# 🎨 UI / CSS ( 鈦藍科技風 Premium Tech Edition - 專為中年企業主與師傅設計 )
 # -------------------------------------------------------------------
 custom_css = """
     <style>
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
 
     html, body, [class*="css"] {
-        font-family: 'Inter', 'Microsoft JhengHei', sans-serif;
+        font-family: 'Plus Jakarta Sans', 'Microsoft JhengHei', '微軟正黑體', sans-serif;
     }
 
+    /* 主背景背景色彩：高質感深鈦藍 */
     .stApp {
-        background-color: #F8F9FA;
+        background-color: #0F172A;
+        color: #F8FAFC;
     }
 
+    /* 隱藏預設 Streamlit 選單與頁尾 */
     [data-testid="stAppDeployButton"], 
     #MainMenu, 
     footer {
@@ -47,18 +51,20 @@ custom_css = """
         background-color: transparent !important;
     }
 
+    /* 側邊欄樣式 */
     section[data-testid="stSidebar"] {
-        background-color: #1E293B !important;
+        background: linear-gradient(180deg, #1E293B 0%, #0F172A 100%) !important;
+        border-right: 1px solid rgba(255, 255, 255, 0.08) !important;
     }
     section[data-testid="stSidebar"] .stMarkdown p,
     section[data-testid="stSidebar"] label,
     section[data-testid="stSidebar"] span,
     section[data-testid="stSidebar"] div {
-        color: #F8FAFC !important;
+        color: #E2E8F0 !important;
         font-weight: 500 !important;
     }
     section[data-testid="stSidebar"] .stCaption {
-        color: #CBD5E1 !important;
+        color: #94A3B8 !important;
     }
     section[data-testid="stSidebar"] h1, 
     section[data-testid="stSidebar"] h2, 
@@ -67,33 +73,100 @@ custom_css = """
         font-weight: 700 !important;
     }
 
+    /* 按鈕高階科技感設計 */
     .stButton>button {
-        border-radius: 8px !important;
+        border-radius: 10px !important;
         font-weight: 600 !important;
-        transition: all 0.2s ease-in-out !important;
-        border: none !important;
+        font-size: 15px !important;
+        padding: 0.5rem 1.25rem !important;
+        transition: all 0.25s ease-in-out !important;
+        border: 1px solid rgba(255, 255, 255, 0.1) !important;
+        background: #1E293B !important;
+        color: #F8FAFC !important;
+    }
+    .stButton>button:hover {
+        background: #334155 !important;
+        border-color: #60A5FA !important;
+        color: #FFFFFF !important;
+        transform: translateY(-1px);
+        box-shadow: 0 4px 12px rgba(96, 165, 250, 0.15) !important;
     }
     .stButton>button[kind="primary"] {
         background: linear-gradient(135deg, #2563EB 0%, #1D4ED8 100%) !important;
         color: white !important;
-        box-shadow: 0 2px 4px rgba(37, 99, 235, 0.2) !important;
+        border: none !important;
+        box-shadow: 0 4px 14px rgba(37, 99, 235, 0.35) !important;
+    }
+    .stButton>button[kind="primary"]:hover {
+        background: linear-gradient(135deg, #3B82F6 0%, #2563EB 100%) !important;
+        box-shadow: 0 6px 20px rgba(59, 130, 246, 0.45) !important;
     }
 
+    /* 頁籤卡片樣式 ( Tabs ) */
     .stTabs [data-baseweb="tab-list"] {
         gap: 8px;
-        background-color: #E2E8F0;
+        background-color: #1E293B;
         padding: 6px;
-        border-radius: 10px;
+        border-radius: 12px;
+        border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+    .stTabs [data-baseweb="tab"] {
+        border-radius: 8px;
+        color: #94A3B8 !important;
+        font-weight: 600;
+        font-size: 15px;
+        padding: 8px 16px;
     }
     .stTabs [aria-selected="true"] {
-        background-color: #FFFFFF !important;
-        color: #0F172A !important;
-        font-weight: 600;
+        background: linear-gradient(135deg, #2563EB 0%, #1D4ED8 100%) !important;
+        color: #FFFFFF !important;
+        font-weight: 700;
+        box-shadow: 0 2px 8px rgba(37, 99, 235, 0.3);
     }
 
+    /* 數據卡片 ( Metric Cards ) 重構 */
+    [data-testid="stMetric"] {
+        background: rgba(30, 41, 59, 0.7) !important;
+        border: 1px solid rgba(255, 255, 255, 0.1) !important;
+        border-radius: 14px !important;
+        padding: 16px 20px !important;
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25) !important;
+        backdrop-filter: blur(8px);
+    }
+    [data-testid="stMetricLabel"] {
+        color: #94A3B8 !important;
+        font-size: 14px !important;
+        font-weight: 600 !important;
+    }
+    [data-testid="stMetricValue"] {
+        color: #F8FAFC !important;
+        font-size: 26px !important;
+        font-weight: 800 !important;
+    }
+
+    /* 表格樣式美化 */
     [data-testid="stDataFrame"] {
-        border: 1px solid #E2E8F0;
-        border-radius: 8px;
+        border: 1px solid rgba(255, 255, 255, 0.1) !important;
+        border-radius: 12px !important;
+        overflow: hidden;
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+    }
+
+    /* 輸入框與表單樣式 */
+    .stTextInput>div>div>input, .stNumberInput>div>div>input, .stSelectbox>div>div {
+        background-color: #1E293B !important;
+        color: #F8FAFC !important;
+        border-radius: 8px !important;
+        border: 1px solid rgba(255, 255, 255, 0.15) !important;
+    }
+    .stTextInput>div>div>input:focus, .stNumberInput>div>div>input:focus {
+        border-color: #60A5FA !important;
+        box-shadow: 0 0 0 2px rgba(96, 165, 250, 0.2) !important;
+    }
+
+    /* 分隔線 */
+    hr {
+        border-color: rgba(255, 255, 255, 0.1) !important;
     }
     </style>
 """
@@ -143,7 +216,7 @@ def add_log_gsheet(action_type, item_name, detail, note=""):
 def undo_last_log():
     df_logs, sheet_logs = load_data("logs")
     if df_logs.empty:
-        return False, "目前沒有可撤銷的歷史紀錄！"
+        return False, "目前沒有可撤銷的歷史紀錄 ！"
     
     last_log = df_logs.iloc[-1]
     action_type = str(last_log["類型"])
@@ -197,7 +270,7 @@ st.sidebar.markdown("### ⚡ ProStock 雲端倉管與 BI")
 st.sidebar.caption("v4.5 Full BI + AI Assistant")
 st.sidebar.markdown("---")
 
-role = st.sidebar.radio("👤 使用者權限切換：", ["👷 現場作業員 (師傅)", "🔑 系統管理員"])
+role = st.sidebar.radio("👤 使用者權限切換 ：", ["👷 現場作業員 (師傅)", "🔑 系統管理員"])
 
 if role == "🔑 系統管理員":
     if not st.session_state.is_admin:
@@ -231,19 +304,19 @@ else:
         "🔨 工具借還與報修"
     ]
 
-page = st.sidebar.radio("系統導覽：", menu_options, label_visibility="collapsed")
+page = st.sidebar.radio("系統導覽 ：", menu_options, label_visibility="collapsed")
 
 # -------------------------------------------------------------------
-# 分頁 AI：🤖 AI 經營決策助理 (Groq LLaMA 3.1 免費極速版)
+# 分頁 AI：🤖 AI 經營決策助理 ( Groq LLaMA 3.1 免費極速版 )
 # -------------------------------------------------------------------
 if page == "🤖 AI 經營決策助理" and st.session_state.is_admin:
     st.title("🤖 老闆專屬 AI 經營決策助理")
-    st.caption("基於全公司實體倉管、專案預算與流水帳數據的即時 AI 決策諮詢 (Powered by Groq LLaMA 3.1)")
+    st.caption("基於全公司實體倉管 、 專案預算與流水帳數據的即時 AI 決策諮詢 ( Powered by Groq LLaMA 3.1 )")
     st.markdown("---")
     
     # 檢查是否設定 GROQ_API_KEY
     if "GROQ_API_KEY" not in st.secrets:
-        st.error("⚠️ 未在 Secrets 中找到 `GROQ_API_KEY`，請完成設定以啟用 AI 助理。")
+        st.error("⚠️ 未在 Secrets 中找到 `GROQ_API_KEY`， 請完成設定以啟用 AI 助理 。")
     else:
         api_key = st.secrets["GROQ_API_KEY"].strip()
         client = Groq(api_key=api_key)
@@ -251,7 +324,7 @@ if page == "🤖 AI 經營決策助理" and st.session_state.is_admin:
         # 初始化聊天歷史
         if "chat_messages" not in st.session_state:
             st.session_state.chat_messages = [
-                {"role": "assistant", "content": "老闆您好！我是您的 AI 經營決策助理。您可以問我任何關於專案材料預算消化率、高價值耗材領用情況、工具設備維修 TCO 評估，或是 2025 全年金流趨勢的問題，我會為您做精準分析！"}
+                {"role": "assistant", "content": "老闆您好 ！ 我是您的 AI 經營決策助理 。 您可以問我任何關於專案材料預算消化率 、 高價值耗材領用情況 、 工具設備維修 TCO 評估 ， 或是 2025 全年金流趨勢的問題 ， 我會為您做精準分析 ！"}
             ]
             
         # 展示歷史訊息
@@ -260,7 +333,7 @@ if page == "🤖 AI 經營決策助理" and st.session_state.is_admin:
                 st.markdown(msg["content"])
                 
         # 使用者輸入框
-        if prompt := st.chat_input("請輸入您想詢問的經營數據問題 (例如: 高價值耗材領用情況)"):
+        if prompt := st.chat_input("請輸入您想詢問的經營數據問題 ( 例如 : 高價值耗材領用情況 )"):
             st.session_state.chat_messages.append({"role": "user", "content": prompt})
             with st.chat_message("user"):
                 st.markdown(prompt)
@@ -282,8 +355,8 @@ if page == "🤖 AI 經營決策助理" and st.session_state.is_admin:
                         logs_sample = df_logs.tail(40).to_string() if not df_logs.empty else "無"
                         
                         system_prompt = f"""
-                        你是一位專精於水電工程與倉管財務的 AI 經營顧問，正在為公司老闆解答經營疑難雜症。
-                        請根據以下提供的公司【實體最新資料庫快照】進行思考與回答。請保持專業、精準、條理分明，並以繁體中文回答，附帶具體的經營建議。
+                        你是一位專精於水電工程與倉管財務的 AI 經營顧問，正為公司老闆解答經營疑難雜症。
+                        請根據以下提供的公司【實體最新資料庫快照】進行思考與回答。請保持專業、精準、條理分明，並以台灣繁體中文回答，附帶具體的經營建議。
 
                         【1. 工程專案預算清單】:
                         {proj_summary}
@@ -294,11 +367,11 @@ if page == "🤖 AI 經營決策助理" and st.session_state.is_admin:
                         【3. 工具設備資產摘要】:
                         {tools_summary}
 
-                        【4. 歷史流水帳摘要 (最近40筆)】:
+                        【4. 歷史流水帳摘要 ( 最近 40 筆 )】:
                         {logs_sample}
                         """
                         
-                        # 2. 呼叫 Groq 免費且強大的 llama-3.1-70b-versatile 或 8b 模型
+                        # 2. 呼叫 Groq 模型
                         response = client.chat.completions.create(
                             model="llama-3.1-8b-instant",
                             messages=[
@@ -313,9 +386,10 @@ if page == "🤖 AI 經營決策助理" and st.session_state.is_admin:
                         st.markdown(ai_reply)
                         st.session_state.chat_messages.append({"role": "assistant", "content": ai_reply})
                     except Exception as e:
-                        st.error(f"❌ AI 分析失敗：{e}")
+                        st.error(f"❌ AI 分析失敗 ： {e}")
+
 # -------------------------------------------------------------------
-# 分頁 A：📦 材料領用與進貨 (一般員工)
+# 分頁 A：📦 材料領用與進貨 ( 一般員工 )
 # -------------------------------------------------------------------
 elif page == "📦 材料領用與進貨":
     st.title("📦 材料領用與進貨登記")
@@ -336,7 +410,7 @@ elif page == "📦 材料領用與進貨":
         
         st.subheader("📋 即時材料庫存狀態")
         
-        search_mat = st.text_input("🔍 快速搜尋材料 (輸入名稱、編號、規格或分類)：", placeholder="例如: 電線, M001, 2.0mm, 管路類...")
+        search_mat = st.text_input("🔍 快速搜尋材料 ( 輸入名稱 、 編號 、 規格或分類 ) ：", placeholder="例如 : 電線 , M001, 2.0mm, 管路類...")
         filtered_mat = df_mat.copy()
         if search_mat:
             search_term = search_mat.strip().lower()
@@ -371,13 +445,13 @@ elif page == "📦 材料領用與進貨":
                     unit = df_mat.loc[idx, "單位"]
                     
                     if borrow_qty > curr_qty:
-                        st.error(f"❌ 庫存不足！目前僅剩庫存：{curr_qty} {unit}")
+                        st.error(f"❌ 庫存不足 ！ 目前僅剩庫存 ： {curr_qty} {unit}")
                     else:
                         df_mat.loc[idx, "目前庫存"] -= borrow_qty
                         save_data(sheet_mat, df_mat)
                         note_text = f"{selected_proj} - 師傅:{worker}"
                         add_log_gsheet("領料出庫", mat_name, f"-{borrow_qty} {unit}", note_text)
-                        st.success(f"✅ 成功領用 [{mat_name}] {borrow_qty} {unit}！專案：{selected_proj}")
+                        st.success(f"✅ 成功領用 [{mat_name}] {borrow_qty} {unit}！ 專案 ： {selected_proj}")
                         st.rerun()
 
         with tab2:
@@ -401,7 +475,7 @@ elif page == "📦 材料領用與進貨":
                     st.rerun()
 
 # -------------------------------------------------------------------
-# 分頁 B：🔨 工具借還與報修 (一般員工)
+# 分頁 B：🔨 工具借還與報修 ( 一般員工 )
 # -------------------------------------------------------------------
 elif page == "🔨 工具借還與報修":
     st.title("🔨 工具資產借還與維修登記")
@@ -412,7 +486,7 @@ elif page == "🔨 工具借還與報修":
     
     if not df_tools.empty:
         st.subheader("📋 設備當前借還與在庫動態")
-        search_tool = st.text_input("🔍 快速搜尋工具：", placeholder="例如: KNIPEX, BAA0002, 壓著鉗...")
+        search_tool = st.text_input("🔍 快速搜尋工具 ：", placeholder="例如 : KNIPEX, BAA0002, 壓著鉗...")
         
         filtered_tools = df_tools.copy()
         if search_tool:
@@ -452,9 +526,9 @@ elif page == "🔨 工具借還與報修":
                         st.success(f"✅ [{df_tools.loc[idx, '工具名稱']}] 已登記借予【{borrower_name}】")
                         st.rerun()
                     else:
-                        st.warning("⚠️ 請填寫借用人姓名。")
+                        st.warning("⚠️ 請填寫借用人姓名 。")
             else:
-                st.info("目前無可借出之在庫工具。")
+                st.info("目前無可借出之在庫工具 。")
 
         with tab_tr:
             if not borrowed_df.empty:
@@ -470,10 +544,10 @@ elif page == "🔨 工具借還與報修":
                     
                     save_data(sheet_tools, df_tools)
                     add_log_gsheet("工具歸還", df_tools.loc[idx, "工具名稱"], b_name, "歸還入庫")
-                    st.success(f"✅ [{df_tools.loc[idx, '工具名稱']}] 已完成歸還！")
+                    st.success(f"✅ [{df_tools.loc[idx, '工具名稱']}] 已完成歸還 ！")
                     st.rerun()
             else:
-                st.success("🎉 當前無外借中工具。")
+                st.success("🎉 當前無外借中工具 。")
 
         with tab_maint:
             col_m1, col_m2 = st.columns(2)
@@ -483,8 +557,8 @@ elif page == "🔨 工具借還與報修":
                 if not can_repair_tools.empty:
                     tool_to_repair = st.selectbox("選擇送修工具", can_repair_tools["工具編號"].astype(str) + " - " + can_repair_tools["工具名稱"], key="emp_rep")
                     repair_reason = st.text_input("故障原因 / 保養描述")
-                    repair_cost = st.number_input("預估/實付維修費用 (元)", min_value=0, step=100, value=1500)
-                    repair_vendor = st.text_input("維修廠商 (選填)")
+                    repair_cost = st.number_input("預估/實付維修費用 ( 元 )", min_value=0, step=100, value=1500)
+                    repair_vendor = st.text_input("維修廠商 ( 選填 )")
                     
                     if st.button("確認登記送修"):
                         if repair_reason:
@@ -498,7 +572,7 @@ elif page == "🔨 工具借還與報修":
                             
                             save_data(sheet_tools, df_tools)
                             add_log_gsheet("工具送修", t_name, f"-${repair_cost}", f"原因: {repair_reason} | 廠商: {repair_vendor} | 維修費:${repair_cost}")
-                            st.success(f"✅ [{t_name}] 已轉為維修狀態，費用 ${repair_cost} 已記帳！")
+                            st.success(f"✅ [{t_name}] 已轉為維修狀態 ， 費用 ${repair_cost} 已記帳 ！")
                             st.rerun()
                         else:
                             st.warning("⚠️ 請輸入故障原因")
@@ -507,7 +581,7 @@ elif page == "🔨 工具借還與報修":
                 st.markdown("##### ✅ 維修完工返回庫存")
                 if not repairing_df.empty:
                     tool_repaired = st.selectbox("選擇完工工具", repairing_df["工具編號"].astype(str) + " - " + repairing_df["工具名稱"], key="emp_repaired")
-                    repair_note = st.text_input("完工備註 (選填)")
+                    repair_note = st.text_input("完工備註 ( 選填 )")
                     
                     if st.button("確認完工入庫"):
                         t_id = tool_repaired.split(" - ")[0]
@@ -520,16 +594,25 @@ elif page == "🔨 工具借還與報修":
                         
                         save_data(sheet_tools, df_tools)
                         add_log_gsheet("維修完成", t_name, "修復完工入庫", f"備註: {repair_note}")
-                        st.success(f"✅ [{t_name}] 重新恢復在庫狀態！")
+                        st.success(f"✅ [{t_name}] 重新恢復在庫狀態 ！")
                         st.rerun()
 
 # -------------------------------------------------------------------
-# 分頁 C：📊 BI 經營決策儀表板 (完整 7 大圖表)
+# 分頁 C：📊 BI 經營決策儀表板 ( 科技質感圖表優化 )
 # -------------------------------------------------------------------
 elif page == "📊 BI 經營決策儀表板" and st.session_state.is_admin:
     st.title("📊 BI 商業智慧經營決策中心")
-    st.caption("結合專案預算、材料金流、庫存資產、設備 TCO 與調度效率之高階經營控制台")
+    st.caption("結合專案預算 、 材料金流 、 庫存資產 、 設備 TCO 與調度效率之高階經營控制台")
     st.markdown("---")
+    
+    # 科技風 Plotly 配色模版設定
+    plotly_layout_defaults = dict(
+        paper_bgcolor='rgba(0,0,0,0)',
+        plot_bgcolor='rgba(0,0,0,0)',
+        font=dict(color="#E2E8F0", family="Plus Jakarta Sans, Microsoft JhengHei"),
+        xaxis=dict(gridcolor='rgba(255, 255, 255, 0.08)', zerolinecolor='rgba(255, 255, 255, 0.15)'),
+        yaxis=dict(gridcolor='rgba(255, 255, 255, 0.08)', zerolinecolor='rgba(255, 255, 255, 0.15)')
+    )
     
     df_logs, _ = load_data("logs")
     df_mat, _ = load_data("materials")
@@ -590,7 +673,7 @@ elif page == "📊 BI 經營決策儀表板" and st.session_state.is_admin:
         # ---------------------------------------------------------------
         # 【圖表 1】專案材料預算 vs 實際消耗金額
         # ---------------------------------------------------------------
-        st.markdown("##### 📈 【圖表 1】專案材料預算 vs 實際消耗金額 (Budget vs. Actual Cost)")
+        st.markdown("##### 📈 【圖表 1】專案材料預算 vs 實際消耗金額 ( Budget vs. Actual Cost )")
         
         if not df_proj.empty:
             df_proj["材料總預算"] = pd.to_numeric(df_proj["材料總預算"], errors='coerce').fillna(0)
@@ -603,18 +686,18 @@ elif page == "📊 BI 經營決策儀表板" and st.session_state.is_admin:
             fig1 = go.Figure()
             fig1.add_trace(go.Bar(
                 y=merged_proj["工程案名稱"], x=merged_proj["材料總預算"],
-                name="材料總預算 (元)", orientation='h', marker_color='#93C5FD',
+                name="材料總預算 ( 元 )", orientation='h', marker_color='#38BDF8',
                 text=[f"${x:,.0f}" for x in merged_proj["材料總預算"]], textposition='outside'
             ))
             fig1.add_trace(go.Bar(
                 y=merged_proj["工程案名稱"], x=merged_proj["消耗金額"],
-                name="實際消耗金額 (元)", orientation='h', marker_color='#1D4ED8',
+                name="實際消耗金額 ( 元 )", orientation='h', marker_color='#6366F1',
                 text=[f"${x:,.0f}" for x in merged_proj["消耗金額"]], textposition='outside'
             ))
             fig1.update_layout(
-                barmode='group', height=320, margin=dict(l=10, r=40, t=10, b=10),
-                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
-                paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)'
+                barmode='group', height=340, margin=dict(l=10, r=40, t=10, b=10),
+                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1, font=dict(color="#CBD5E1")),
+                **plotly_layout_defaults
             )
             st.plotly_chart(fig1, use_container_width=True)
             
@@ -623,14 +706,14 @@ elif page == "📊 BI 經營決策儀表板" and st.session_state.is_admin:
             
             if not over_budget.empty:
                 for _, row in over_budget.iterrows():
-                    st.error(f"🚨 **預算超支警報**：【{row['工程案名稱']}】材料已超出預算 **${row['消耗金額'] - row['材料總預算']:,.0f} 元** (使用率 {row['預算使用率 (%)']}%)！建議 PM 查核是否有材料偷挪用或漏報追加工程。")
+                    st.error(f"🚨 **預算超支警報** ： 【{row['工程案名稱']}】材料已超出預算 **${row['消耗金額'] - row['材料總預算']:,.0f} 元** ( 使用率 {row['預算使用率 (%)']}% )！ 建議 PM 查核是否有材料偷挪用或漏報追加工程 。")
             if not warning_budget.empty:
                 for _, row in warning_budget.iterrows():
-                    st.warning(f"⚠️ **預算高風險預警**：【{row['工程案名稱']}】預算已消化 **{row['預算使用率 (%)']}%**！請 PM 查核剩餘工期進度。")
+                    st.warning(f"⚠️ **預算高風險預警** ： 【{row['工程案名稱']}】預算已消化 **{row['預算使用率 (%)']}%**！ 請 PM 查核剩餘工期進度 。")
             if over_budget.empty and warning_budget.empty:
-                st.success("🎉 當前所有進行中工程專案之材料預算均控管良好！")
+                st.success("🎉 當前所有進行中工程專案之材料預算均控管良好 ！")
         else:
-            st.info("💡 請先至【🏗️ 工程案預算管理】建檔工程案以啟用預算分析。")
+            st.info("💡 請先至【🏗️ 工程案預算管理】建檔工程案以啟用預算分析 。")
 
         st.markdown("---")
         
@@ -640,7 +723,7 @@ elif page == "📊 BI 經營決策儀表板" and st.session_state.is_admin:
         col_a, col_b = st.columns(2)
         
         with col_a:
-            st.markdown("##### 💎 【圖表 2A】高價值材料 (A類資產) 消耗總金額排行榜")
+            st.markdown("##### 💎 【圖表 2A】高價值材料 ( A類資產 ) 消耗總金額排行榜")
             if not usage_logs.empty and usage_logs["消耗金額"].sum() > 0:
                 mat_cost_df = usage_logs.groupby("項目名稱")["消耗金額"].sum().reset_index()
                 mat_cost_df = mat_cost_df.sort_values(by="消耗金額", ascending=False).head(5)
@@ -648,44 +731,44 @@ elif page == "📊 BI 經營決策儀表板" and st.session_state.is_admin:
                 fig2a = px.bar(
                     mat_cost_df, x="消耗金額", y="項目名稱", orientation='h',
                     text=[f"${x:,.0f}" for x in mat_cost_df["消耗金額"]],
-                    color="消耗金額", color_continuous_scale="Teal"
+                    color="消耗金額", color_continuous_scale="Viridis"
                 )
                 fig2a.update_traces(textposition='outside')
-                fig2a.update_layout(yaxis={'categoryorder':'total ascending', 'title':''}, coloraxis_showscale=False, height=320, margin=dict(l=10, r=40, t=10, b=10))
+                fig2a.update_layout(yaxis={'categoryorder':'total ascending', 'title':''}, coloraxis_showscale=False, height=320, margin=dict(l=10, r=40, t=10, b=10), **plotly_layout_defaults)
                 st.plotly_chart(fig2a, use_container_width=True)
                 
                 top_mat = mat_cost_df.iloc[0]["項目名稱"]
                 top_val = mat_cost_df.iloc[0]["消耗金額"]
-                st.info(f"💡 **ABC 採購建議**：【{top_mat}】為金流消耗最高之材料（已消耗 ${top_val:,.0f} 元）。建議採用 JIT 及時採購，避免囤積資金。")
+                st.info(f"💡 **ABC 採購建議** ： 【{top_mat}】為金流消耗最高之材料 （ 已消耗 ${top_val:,.0f} 元 ） 。 建議採用 JIT 及時採購 ， 避免囤積資金 。")
             else:
-                st.info("尚無領料出庫金流紀錄。")
+                st.info("尚無領料出庫金流紀錄 。")
 
         with col_b:
-            st.markdown("##### 💰 【圖表 2B】庫存積壓資產金額排行榜 (Top 5)")
+            st.markdown("##### 💰 【圖表 2B】庫存積壓資產金額排行榜 ( Top 5 )")
             stock_val_df = df_mat[df_mat["庫存總價值"] > 0].sort_values(by="庫存總價值", ascending=False).head(5)
             
             if not stock_val_df.empty:
                 fig2b = px.bar(
                     stock_val_df, x="庫存總價值", y="材料名稱", orientation='h',
                     text=[f"${x:,.0f}" for x in stock_val_df["庫存總價值"]],
-                    color="庫存總價值", color_continuous_scale="Purples"
+                    color="庫存總價值", color_continuous_scale="Plasma"
                 )
                 fig2b.update_traces(textposition='outside')
-                fig2b.update_layout(yaxis={'categoryorder':'total ascending', 'title':''}, coloraxis_showscale=False, height=320, margin=dict(l=10, r=40, t=10, b=10))
+                fig2b.update_layout(yaxis={'categoryorder':'total ascending', 'title':''}, coloraxis_showscale=False, height=320, margin=dict(l=10, r=40, t=10, b=10), **plotly_layout_defaults)
                 st.plotly_chart(fig2b, use_container_width=True)
                 
                 top_stock_mat = stock_val_df.iloc[0]["材料名稱"]
                 top_stock_val = stock_val_df.iloc[0]["庫存總價值"]
-                st.warning(f"💡 **靜態資產建議**：【{top_stock_mat}】目前倉庫積壓金額達 **${top_stock_val:,.0f} 元**。請 PM 優先將此庫存調撥至近期專案使用，加速資產週轉。")
+                st.warning(f"💡 **靜態資產建議** ： 【{top_stock_mat}】目前倉庫積壓金額達 **${top_stock_val:,.0f} 元** 。 請 PM 優先將此庫存調撥至近期專案使用 ， 加速資產週轉 。")
             else:
-                st.info("目前倉庫內無高價值庫存材料。")
+                st.info("目前倉庫內無高價值庫存材料 。")
 
         st.markdown("---")
         
         # ---------------------------------------------------------------
-        # 【圖表 3】高頻損壞 / 設備報修警報 (TCO 分析)
+        # 【圖表 3】高頻損壞 / 設備報修警報 ( TCO 分析 )
         # ---------------------------------------------------------------
-        st.markdown("##### 🚨 【圖表 3】高頻損壞 / 設備報修警報 (TCO 總持有成本分析)")
+        st.markdown("##### 🚨 【圖表 3】高頻損壞 / 設備報修警報 ( TCO 總持有成本分析 )")
         if not df_tools.empty:
             if "新機購入單價" not in df_tools.columns: df_tools["新機購入單價"] = 0
             df_tools["新機購入單價"] = pd.to_numeric(df_tools["新機購入單價"], errors='coerce').fillna(0)
@@ -717,7 +800,7 @@ elif page == "📊 BI 經營決策儀表板" and st.session_state.is_admin:
                     text="送修次數", color="送修次數", color_continuous_scale="Reds"
                 )
                 fig3.update_traces(textposition='outside')
-                fig3.update_layout(yaxis={'categoryorder':'total ascending', 'title':''}, coloraxis_showscale=False, height=320, margin=dict(l=10, r=30, t=10, b=10))
+                fig3.update_layout(yaxis={'categoryorder':'total ascending', 'title':''}, coloraxis_showscale=False, height=320, margin=dict(l=10, r=30, t=10, b=10), **plotly_layout_defaults)
                 st.plotly_chart(fig3, use_container_width=True)
                 
                 worst_tool = tco_df.iloc[0]["項目名稱"]
@@ -725,13 +808,13 @@ elif page == "📊 BI 經營決策儀表板" and st.session_state.is_admin:
                 worst_cost = tco_df.iloc[0]["累積維修費用"]
                 
                 if worst_count >= 3:
-                    st.error(f"💡 **修不如買建議**：【{worst_tool}】累積送修已達 **{worst_count} 次** (累積費用 ${worst_cost:,.0f} 元)，維修成本過高。建議直接辦理**資產報廢並購買新機**。")
+                    st.error(f"💡 **修不如買建議** ： 【{worst_tool}】累積送修已達 **{worst_count} 次** ( 累積費用 ${worst_cost:,.0f} 元 ) ， 維修成本過高 。 建議直接辦理 **資產報廢並購買新機** 。")
                 else:
-                    st.warning(f"💡 **保養建議**：【{worst_tool}】送修頻率偏高，請安排原廠定期檢測。")
+                    st.warning(f"💡 **保養建議** ： 【{worst_tool}】送修頻率偏高 ， 請安排原廠定期檢測 。")
             else:
-                st.success("🎉 目前設備狀況良好，無任何故障送修紀錄！")
+                st.success("🎉 目前設備狀況良好 ， 無任何故障送修紀錄 ！")
         else:
-            st.info("無工具資料。")
+            st.info("無工具資料 。")
 
         st.markdown("---")
         
@@ -753,19 +836,19 @@ elif page == "📊 BI 經營決策儀表板" and st.session_state.is_admin:
                         trend_df = usage_logs_valid.groupby("日期")["消耗金額"].sum().reset_index()
                         
                         fig4 = px.line(trend_df, x="日期", y="消耗金額", markers=True, line_shape="spline")
-                        fig4.update_traces(line_color="#2563EB", line_width=3)
-                        fig4.update_layout(height=280, margin=dict(l=10, r=20, t=10, b=10), xaxis_title="", yaxis_title="每日消耗金額 (元)")
+                        fig4.update_traces(line_color="#38BDF8", line_width=3)
+                        fig4.update_layout(height=280, margin=dict(l=10, r=20, t=10, b=10), xaxis_title="", yaxis_title="每日消耗金額 ( 元 )", **plotly_layout_defaults)
                         st.plotly_chart(fig4, use_container_width=True)
-                        st.caption("💡 **資金流洞察**：監控每日資金消耗峰值，可協助財務預先安排專案材料款項。")
+                        st.caption("💡 **資金流洞察** ： 監控每日資金消耗峰值 ， 可協助財務預先安排專案材料款項 。")
                     else:
-                        st.info("時間解析中 (請確認流水帳中包含標準時間格式)。")
+                        st.info("時間解析中 ( 請確認流水帳中包含標準時間格式 ) 。")
                 except Exception as e:
-                    st.info(f"時間解析中 ({e})。")
+                    st.info(f"時間解析中 ( {e} ) 。")
             else:
-                st.info("尚無時間序列數據。")
+                st.info("尚無時間序列數據 。")
 
         with col_d:
-            st.markdown("##### ⏳ 【圖表 5】外借工具超期滯留警報 (> 7 天未歸還)")
+            st.markdown("##### ⏳ 【圖表 5】外借工具超期滯留警報 ( > 7 天未歸還 )")
             if not df_tools.empty:
                 borrowed_tools = df_tools[df_tools["狀態"] == "借出"].copy()
                 if not borrowed_tools.empty and "借出日期" in borrowed_tools.columns:
@@ -780,23 +863,23 @@ elif page == "📊 BI 經營決策儀表板" and st.session_state.is_admin:
                             overdue_tools[["工具編號", "工具名稱", "當前借用人", "借出日期", "借出天數"]],
                             use_container_width=True
                         )
-                        st.warning("💡 **調度建議**：以上工具外借已超過 7 天，請發送催還通知，避免機具閒置或重複購買。")
+                        st.warning("💡 **調度建議** ： 以上工具外借已超過 7 天 ， 請發送催還通知 ， 避免機具閒置或重複購買 。")
                     else:
-                        st.success("🎉 當前所有外借工具均在正常 7 天借期內！")
+                        st.success("🎉 當前所有外借工具均在正常 7 天借期內 ！")
                 else:
-                    st.info("目前沒有外借中的工具。")
+                    st.info("目前沒有外借中的工具 。")
             else:
-                st.info("無工具資料。")
+                st.info("無工具資料 。")
 
     else:
-        st.info("💡 請確認材料表中包含【單價】資訊，即可展現完整 BI 圖表！")
+        st.info("💡 請確認材料表中包含【單價】資訊 ， 即可展現完整 BI 圖表 ！")
 
 # -------------------------------------------------------------------
-# 分頁 D：🏗️ 工程案預算管理 (管理員專屬)
+# 分頁 D：🏗️ 工程案預算管理 ( 管理員專屬 )
 # -------------------------------------------------------------------
 elif page == "🏗️ 工程案預算管理" and st.session_state.is_admin:
     st.title("🏗️ 工程專案預算管理中心")
-    st.caption("建立工地專案基本資料、客戶對象與材料預算上限")
+    st.caption("建立工地專案基本資料 、 客戶對象與材料預算上限")
     st.markdown("---")
     
     df_proj, sheet_proj = load_data("projects")
@@ -810,10 +893,10 @@ elif page == "🏗️ 工程案預算管理" and st.session_state.is_admin:
     with st.form("add_project_form"):
         p_col1, p_col2 = st.columns(2)
         with p_col1:
-            p_name = st.text_input("工程案名稱 (例如: A棟15F浴室改修)")
-            p_client = st.text_input("客戶 / 報價對象 (例如: 遠雄建設)")
+            p_name = st.text_input("工程案名稱 ( 例如 : A棟15F浴室改修 )")
+            p_client = st.text_input("客戶 / 報價對象 ( 例如 : 遠雄建設 )")
         with p_col2:
-            p_budget = st.number_input("材料總預算 (元)", min_value=1000, step=10000, value=200000)
+            p_budget = st.number_input("材料總預算 ( 元 )", min_value=1000, step=10000, value=200000)
             p_date = st.date_input("開工日期")
             
         submit_p = st.form_submit_button("🚀 確認建立工程專案", type="primary")
@@ -835,11 +918,11 @@ elif page == "🏗️ 工程案預算管理" and st.session_state.is_admin:
             st.rerun()
 
 # -------------------------------------------------------------------
-# 分頁 E：📦 材料庫存總覽 (管理員全功能)
+# 分頁 E：📦 材料庫存總覽 ( 管理員全功能 )
 # -------------------------------------------------------------------
 elif page == "📦 材料庫存總覽" and st.session_state.is_admin:
     st.title("📦 材料庫存全功能管理模組")
-    st.caption("完整品項控制、單價設定與警戒監控")
+    st.caption("完整品項控制 、 單價設定與警戒監控")
     st.markdown("---")
     
     df_mat, sheet_mat = load_data("materials")
@@ -860,13 +943,13 @@ elif page == "📦 材料庫存總覽" and st.session_state.is_admin:
         st.markdown("<br>", unsafe_allow_html=True)
         
         if not low_stock_df.empty:
-            st.error("⚠️ **【安全庫存預警】以下材料低於設定警戒線，請妥善規劃採購補貨：**")
+            st.error("⚠️ **【安全庫存預警】以下材料低於設定警戒線， 請妥善規劃採購補貨 ：**")
             st.dataframe(low_stock_df[["材料編號", "材料名稱", "分類", "目前庫存", "安全庫存量", "單位"]], use_container_width=True)
 
         col_ex1, _ = st.columns([1, 4])
         with col_ex1:
             csv_data = df_mat.to_csv(index=False).encode('utf-8-sig')
-            st.download_button("📥 匯出材料總表 (CSV)", data=csv_data, file_name=f"材料庫存總表_{datetime.now().strftime('%Y%m%d')}.csv", mime="text/csv")
+            st.download_button("📥 匯出材料總表 ( CSV )", data=csv_data, file_name=f"材料庫存總表_{datetime.now().strftime('%Y%m%d')}.csv", mime="text/csv")
 
         st.subheader("📋 雲端即時材料資料庫")
         st.dataframe(df_mat, use_container_width=True)
@@ -879,7 +962,7 @@ elif page == "📦 材料庫存總覽" and st.session_state.is_admin:
                 new_name = st.text_input("材料名稱")
                 new_spec = st.text_input("規格/尺寸")
                 new_cat = st.text_input("分類名稱")
-                new_price = st.number_input("材料單價 (元)", min_value=0, step=10, value=100)
+                new_price = st.number_input("材料單價 ( 元 )", min_value=0, step=10, value=100)
                 init_qty = st.number_input("初始庫存數量", min_value=0, step=1)
                 safe_qty = st.number_input("安全庫存警戒門檻", min_value=1, step=1)
                 unit_str = st.text_input("單位")
@@ -889,7 +972,7 @@ elif page == "📦 材料庫存總覽" and st.session_state.is_admin:
                     df_mat = pd.concat([df_mat, pd.DataFrame([new_row])], ignore_index=True)
                     save_data(sheet_mat, df_mat)
                     add_log_gsheet("新增品項", new_name, f"+{init_qty}{unit_str}", f"規格:{new_spec} | 單價:${new_price}")
-                    st.success("✅ 建檔成功！"); st.rerun()
+                    st.success("✅ 建檔成功 ！"); st.rerun()
 
         with tab2:
             selected_edit = st.selectbox("選擇修改項目", df_mat["材料編號"].astype(str) + " - " + df_mat["材料名稱"], key="adm_edit_sel")
@@ -898,7 +981,7 @@ elif page == "📦 材料庫存總覽" and st.session_state.is_admin:
                 m_idx = df_mat[df_mat["材料編號"].astype(str) == e_id].index[0]
                 with st.form("adm_edit_form"):
                     e_name = st.text_input("材料名稱", value=df_mat.loc[m_idx, "材料名稱"])
-                    e_price = st.number_input("材料單價 (元)", value=int(df_mat.loc[m_idx, "單價"]) if "單價" in df_mat.columns else 0, min_value=0)
+                    e_price = st.number_input("材料單價 ( 元 )", value=int(df_mat.loc[m_idx, "單價"]) if "單價" in df_mat.columns else 0, min_value=0)
                     e_cat = st.text_input("分類名稱", value=df_mat.loc[m_idx, "分類"])
                     e_unit = st.text_input("單位", value=df_mat.loc[m_idx, "單位"])
                     e_qty = st.number_input("目前庫存", value=int(df_mat.loc[m_idx, "目前庫存"]), min_value=0)
@@ -906,7 +989,7 @@ elif page == "📦 材料庫存總覽" and st.session_state.is_admin:
                     if st.form_submit_button("💾 儲存修改內容"):
                         df_mat.loc[m_idx, ["材料名稱", "單價", "分類", "單位", "目前庫存", "安全庫存量"]] = [e_name, e_price, e_cat, e_unit, e_qty, e_safe]
                         save_data(sheet_mat, df_mat)
-                        st.success("✅ 修改儲存成功！"); st.rerun()
+                        st.success("✅ 修改儲存成功 ！"); st.rerun()
 
         with tab3:
             selected_del = st.selectbox("選擇要刪除的材料", df_mat["材料編號"].astype(str) + " - " + df_mat["材料名稱"], key="adm_del_sel")
@@ -914,12 +997,12 @@ elif page == "📦 材料庫存總覽" and st.session_state.is_admin:
                 d_id = selected_del.split(" - ")[0]
                 d_idx = df_mat[df_mat["材料編號"].astype(str) == d_id].index[0]
                 d_name = df_mat.loc[d_idx, "材料名稱"]
-                st.warning(f"⚠️ 確定下架刪除 [{d_name}] 嗎？")
+                st.warning(f"⚠️ 確定下架刪除 [{d_name}] 嗎 ？")
                 chk = st.checkbox(f"我確定要刪除 [{d_name}]")
                 if st.button("🔥 確定刪除") and chk:
                     df_mat = df_mat.drop(d_idx).reset_index(drop=True)
                     save_data(sheet_mat, df_mat)
-                    st.success("✅ 刪除成功！"); st.rerun()
+                    st.success("✅ 刪除成功 ！"); st.rerun()
 
         with tab4:
             with st.form("adm_in_form"):
@@ -937,11 +1020,11 @@ elif page == "📦 材料庫存總覽" and st.session_state.is_admin:
                     st.success(f"✅ 已成功入庫 [{mat_name}]"); st.rerun()
 
 # -------------------------------------------------------------------
-# 分頁 F：🔨 工具資產追蹤 (管理員全功能)
+# 分頁 F：🔨 工具資產追蹤 ( 管理員全功能 )
 # -------------------------------------------------------------------
 elif page == "🔨 工具資產追蹤" and st.session_state.is_admin:
     st.title("🔨 工具與固定資產管理")
-    st.caption("資產檔案建檔、新機身價與報銷控制")
+    st.caption("資產檔案建檔 、 新機身價與報銷控制")
     st.markdown("---")
     
     df_tools, sheet_tools = load_data("tools")
@@ -956,13 +1039,13 @@ elif page == "🔨 工具資產追蹤" and st.session_state.is_admin:
                 t_brand = st.text_input("品牌 / 廠牌")
                 t_model = st.text_input("型號")
                 t_cat = st.text_input("分類名稱")
-                t_price = st.number_input("新機購入單價 (元)", min_value=0, step=500, value=8500)
+                t_price = st.number_input("新機購入單價 ( 元 )", min_value=0, step=500, value=8500)
                 if st.form_submit_button("確認新增建檔") and t_name:
                     new_t_id = f"T{len(df_tools) + 1:03d}"
                     new_tool = {"工具編號": new_t_id, "工具名稱": t_name, "品牌/廠牌": t_brand or "無", "型號": t_model or "無", "分類": t_cat or "通用", "新機購入單價": t_price, "狀態": "在庫", "當前借用人": "無", "借出日期": "無"}
                     df_tools = pd.concat([df_tools, pd.DataFrame([new_tool])], ignore_index=True)
                     save_data(sheet_tools, df_tools)
-                    st.success("✅ 建檔成功！"); st.rerun()
+                    st.success("✅ 建檔成功 ！"); st.rerun()
 
         with tab_te:
             selected_edit_t = st.selectbox("選擇要編輯的工具", df_tools["工具編號"].astype(str) + " - " + df_tools["工具名稱"], key="edit_t_sel")
@@ -971,13 +1054,13 @@ elif page == "🔨 工具資產追蹤" and st.session_state.is_admin:
                 et_idx = df_tools[df_tools["工具編號"].astype(str) == et_id].index[0]
                 with st.form("edit_tool_form"):
                     et_name = st.text_input("工具名稱", value=df_tools.loc[et_idx, "工具名稱"])
-                    et_price = st.number_input("新機購入單價 (元)", value=int(df_tools.loc[et_idx, "新機購入單價"]) if "新機購入單價" in df_tools.columns else 0, min_value=0)
+                    et_price = st.number_input("新機購入單價 ( 元 )", value=int(df_tools.loc[et_idx, "新機購入單價"]) if "新機購入單價" in df_tools.columns else 0, min_value=0)
                     et_brand = st.text_input("品牌", value=df_tools.loc[et_idx, "品牌/廠牌"])
                     et_model = st.text_input("型號", value=df_tools.loc[et_idx, "型號"])
                     if st.form_submit_button("💾 儲存修改內容"):
                         df_tools.loc[et_idx, ["工具名稱", "新機購入單價", "品牌/廠牌", "型號"]] = [et_name, et_price, et_brand, et_model]
                         save_data(sheet_tools, df_tools)
-                        st.success("✅ 工具資料更新成功！"); st.rerun()
+                        st.success("✅ 工具資料更新成功 ！"); st.rerun()
 
         with tab_td:
             selected_del_t = st.selectbox("選擇報銷工具", df_tools["工具編號"].astype(str) + " - " + df_tools["工具名稱"])
@@ -988,24 +1071,24 @@ elif page == "🔨 工具資產追蹤" and st.session_state.is_admin:
                 if st.button(f"🔥 確定報銷刪除 [{dt_name}]"):
                     df_tools = df_tools.drop(dt_idx).reset_index(drop=True)
                     save_data(sheet_tools, df_tools)
-                    st.success("✅ 資產報銷成功！"); st.rerun()
+                    st.success("✅ 資產報銷成功 ！"); st.rerun()
 
 # -------------------------------------------------------------------
-# 分頁 G：📤 CSV 批次資料匯入 (管理員專屬)
+# 分頁 G：📤 CSV 批次資料匯入 ( 管理員專屬 )
 # -------------------------------------------------------------------
 elif page == "📤 CSV 批次資料匯入" and st.session_state.is_admin:
     st.title("📤 批次資料匯入中心")
     st.caption("快速將外部 CSV 清單同步導入雲端資料庫")
     st.markdown("---")
     
-    target_type = st.radio("📌 第一步：選擇資料目標類型", ["📦 材料耗材", "🔨 工具資產", "📜 歷史紀錄", "🏗️ 工程案預算"], horizontal=True)
-    uploaded_file = st.file_uploader("📂 第二步：上傳 CSV 檔案", type=["csv"])
+    target_type = st.radio("📌 第一步 ： 選擇資料目標類型", ["📦 材料耗材", "🔨 工具資產", "📜 歷史紀錄", "🏗️ 工程案預算"], horizontal=True)
+    uploaded_file = st.file_uploader("📂 第二步 ： 上傳 CSV 檔案", type=["csv"])
     
     if uploaded_file is not None:
         try:
             import_df = pd.read_csv(uploaded_file, encoding='utf-8-sig')
             st.dataframe(import_df.head(10), use_container_width=True)
-            import_mode = st.radio("🔄 第三步：匯入模式設定", ["追加至現有資料庫底部", "完全覆蓋現有資料庫 (謹慎選用)"])
+            import_mode = st.radio("🔄 第三步 ： 匯入模式設定", ["追加至現有資料庫底部", "完全覆蓋現有資料庫 ( 謹慎選用 )"])
             
             if st.button("🚀 確認執行批次匯入", type="primary"):
                 if "材料" in target_type:
@@ -1014,38 +1097,38 @@ elif page == "📤 CSV 批次資料匯入" and st.session_state.is_admin:
                     if "單價" not in import_df.columns: import_df["單價"] = 0
                     final_df = import_df if "完全覆蓋" in import_mode else pd.concat([df_mat, import_df], ignore_index=True)
                     save_data(sheet_mat, final_df)
-                    st.success("🎉 材料資料匯入成功！")
+                    st.success("🎉 材料資料匯入成功 ！")
                 elif "工具" in target_type:
                     df_tools, sheet_tools = load_data("tools")
                     if "新機購入單價" not in import_df.columns: import_df["新機購入單價"] = 0
                     final_df = import_df if "完全覆蓋" in import_mode else pd.concat([df_tools, import_df], ignore_index=True)
                     save_data(sheet_tools, final_df)
-                    st.success("🎉 工具資料匯入成功！")
+                    st.success("🎉 工具資料匯入成功 ！")
                 elif "工程案" in target_type:
                     df_proj, sheet_proj = load_data("projects")
                     final_df = import_df if "完全覆蓋" in import_mode else pd.concat([df_proj, import_df], ignore_index=True)
                     save_data(sheet_proj, final_df)
-                    st.success("🎉 工程案預算資料匯入成功！")
+                    st.success("🎉 工程案預算資料匯入成功 ！")
                 else:
                     df_logs, sheet_logs = load_data("logs")
                     final_df = import_df if "完全覆蓋" in import_mode else pd.concat([df_logs, import_df], ignore_index=True)
                     save_data(sheet_logs, final_df)
-                    st.success("🎉 歷史紀錄匯入成功！")
+                    st.success("🎉 歷史紀錄匯入成功 ！")
         except Exception as e:
-            st.error(f"❌ 讀取失敗：{e}")
+            st.error(f"❌ 讀取失敗 ： {e}")
 
 # -------------------------------------------------------------------
-# 分頁 H：📜 雲端流水帳紀錄 (管理員專屬)
+# 分頁 H：📜 雲端流水帳紀錄 ( 管理員專屬 )
 # -------------------------------------------------------------------
 elif page == "📜 雲端流水帳紀錄" and st.session_state.is_admin:
     st.title("📜 全系統歷史異動稽核日誌")
-    st.caption("即時記錄每一筆領用、進貨、借還與維修操作")
+    st.caption("即時記錄每一筆領用 、 進貨 、 借還與維修操作")
     st.markdown("---")
     
     df_logs, _ = load_data("logs")
     if not df_logs.empty:
         last_log = df_logs.iloc[-1]
-        st.info(f"📌 最新動態：【{last_log['時間']}】 - 【{last_log['類型']}】 - {last_log['項目名稱']}")
+        st.info(f"📌 最新動態 ： 【{last_log['時間']}】 - 【{last_log['類型']}】 - {last_log['項目名稱']}")
         if st.button("↩️ 一鍵反轉/撤銷最後這筆操作", type="primary"):
             success, msg = undo_last_log()
             if success: st.success(msg); st.rerun()
