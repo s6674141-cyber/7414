@@ -7,22 +7,23 @@ from google.oauth2.service_account import Credentials
 import re
 import plotly.express as px
 import plotly.graph_objects as go
+import google.generativeai as genai
 
 # -------------------------------------------------------------------
-# 0. 跨平台字型與頁面基本設定
+# 0. 頁面基本設定 (預設展開側邊欄)
 # -------------------------------------------------------------------
 plt.rcParams['font.sans-serif'] = ['Microsoft JhengHei', 'PingFang TC', 'Arial Unicode MS', 'DejaVu Sans']
 plt.rcParams['axes.unicode_minus'] = False
 
 st.set_page_config(
-    page_title="ProStock 雲端倉管與 BI 決策系統",
+    page_title="ProStock 雲端倉管與 AI BI 決策系統",
     page_icon="⚡",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
 # -------------------------------------------------------------------
-# 🎨 UI / CSS 自訂注入
+# 🎨 UI / CSS (v3.5 Full BI Edition 簡約質感深色風)
 # -------------------------------------------------------------------
 custom_css = """
     <style>
@@ -36,7 +37,6 @@ custom_css = """
         background-color: #F8F9FA;
     }
 
-    /* 只隱藏右上角部署與功能選單，完整保留頂部 Header 與側邊欄展開箭頭 */
     [data-testid="stAppDeployButton"], 
     #MainMenu, 
     footer {
@@ -195,7 +195,7 @@ if "is_admin" not in st.session_state:
     st.session_state.is_admin = False
 
 st.sidebar.markdown("### ⚡ ProStock 雲端倉管與 BI")
-st.sidebar.caption("v3.5 Full BI Edition")
+st.sidebar.caption("v4.5 Full BI + AI Assistant")
 st.sidebar.markdown("---")
 
 role = st.sidebar.radio("👤 使用者權限切換：", ["👷 現場作業員 (師傅)", "🔑 系統管理員"])
@@ -217,6 +217,7 @@ st.sidebar.markdown("---")
 if st.session_state.is_admin:
     st.sidebar.markdown("**核心模組選單**")
     menu_options = [
+        "🤖 AI 經營決策助理",
         "📊 BI 經營決策儀表板",
         "🏗️ 工程案預算管理",
         "📦 材料庫存總覽", 
@@ -234,9 +235,84 @@ else:
 page = st.sidebar.radio("系統導覽：", menu_options, label_visibility="collapsed")
 
 # -------------------------------------------------------------------
+# 分頁 AI：🤖 AI 經營決策助理 (老闆專屬對話框)
+# -------------------------------------------------------------------
+if page == "🤖 AI 經營決策助理" and st.session_state.is_admin:
+    st.title("🤖 老闆專屬 AI 經營決策助理")
+    st.caption("基於全公司實體倉管、專案預算與流水帳數據的即時 AI 決策諮詢")
+    st.markdown("---")
+    
+    # 檢查是否設定 GEMINI_API_KEY
+    if "GEMINI_API_KEY" not in st.secrets:
+        st.error("⚠️ 未在 `.streamlit/secrets.toml` 中找到 `GEMINI_API_KEY`，請完成設定以啟用 AI 助理。")
+    else:
+        genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
+        
+        # 初始化聊天歷史
+        if "chat_messages" not in st.session_state:
+            st.session_state.chat_messages = [
+                {"role": "assistant", "content": "老闆您好！我是您的 AI 經營決策助理。您可以問我任何關於專案材料預算消化率、高價值耗材領用情況、工具設備維修 TCO 評估，或是 2025 全年金流趨勢的問題，我會為您做精準分析！"}
+            ]
+            
+        # 展示歷史訊息
+        for msg in st.session_state.chat_messages:
+            with st.chat_message(msg["role"]):
+                st.markdown(msg["content"])
+                
+        # 使用者輸入框
+        if prompt := st.chat_input("請輸入您想詢問的經營數據問題 (例如: 2025年哪一個工程案材料花最多錢？有超支嗎？)"):
+            st.session_state.chat_messages.append({"role": "user", "content": prompt})
+            with st.chat_message("user"):
+                st.markdown(prompt)
+                
+            # 準備向 AI 傳送 Prompt
+            with st.chat_message("assistant"):
+                with st.spinner("🤖 AI 正在讀取並分析公司資料庫中..."):
+                    try:
+                        # 1. 抓取最新數據快照
+                        df_logs, _ = load_data("logs")
+                        df_mat, _ = load_data("materials")
+                        df_proj, _ = load_data("projects")
+                        df_tools, _ = load_data("tools")
+                        
+                        # 摘要數據供 Prompt 使用
+                        mat_summary = df_mat[["材料名稱", "目前庫存", "安全庫存量", "單價"]].to_string() if not df_mat.empty else "無"
+                        proj_summary = df_proj.to_string() if not df_proj.empty else "無"
+                        tools_summary = df_tools[["工具名稱", "品牌/廠牌", "型號", "新機購入單價", "狀態"]].to_string() if not df_tools.empty else "無"
+                        logs_sample = df_logs.tail(100).to_string() if not df_logs.empty else "無"
+                        
+                        system_prompt = f"""
+                        你是一位專精於水電工程與倉管財務的 AI 經營顧問，正在為公司老闆解答經營疑難雜症。
+                        請根據以下提供的公司【實體最新資料庫快照】進行思考與回答。請保持專業、精準、口吻親切，並附帶具體的經營建議（例如：JIT採購、報廢新購、預算稽核）。
+
+                        【1. 工程專案預算清單】:
+                        {proj_summary}
+
+                        【2. 庫存與單價摘要】:
+                        {mat_summary}
+
+                        【3. 工具設備資產摘要】:
+                        {tools_summary}
+
+                        【4. 歷史流水帳摘要 (最近100筆)】:
+                        {logs_sample}
+
+                        使用者問題: {prompt}
+                        """
+                        
+                        model = genai.GenerativeModel('gemini-1.5-flash')
+                        response = model.generate_content(system_prompt)
+                        ai_reply = response.text
+                        
+                        st.markdown(ai_reply)
+                        st.session_state.chat_messages.append({"role": "assistant", "content": ai_reply})
+                    except Exception as e:
+                        st.error(f"❌ AI 分析失敗，請確認 API Key 與連線狀態：{e}")
+
+# -------------------------------------------------------------------
 # 分頁 A：📦 材料領用與進貨 (一般員工)
 # -------------------------------------------------------------------
-if page == "📦 材料領用與進貨":
+elif page == "📦 材料領用與進貨":
     st.title("📦 材料領用與進貨登記")
     st.caption("現場即時庫存扣抵與進貨補給面板")
     st.markdown("---")
@@ -443,7 +519,7 @@ elif page == "🔨 工具借還與報修":
                         st.rerun()
 
 # -------------------------------------------------------------------
-# 分頁 C：📊 BI 經營決策儀表板 (完整 7 大圖表經營控制台)
+# 分頁 C：📊 BI 經營決策儀表板 (完整 7 大圖表)
 # -------------------------------------------------------------------
 elif page == "📊 BI 經營決策儀表板" and st.session_state.is_admin:
     st.title("📊 BI 商業智慧經營決策中心")
@@ -664,7 +740,6 @@ elif page == "📊 BI 經營決策儀表板" and st.session_state.is_admin:
             if not usage_logs.empty and "時間" in usage_logs.columns:
                 try:
                     usage_logs_copy = usage_logs.copy()
-                    # 強制轉為 datetime 格式，支援多種常見時間字串
                     usage_logs_copy["時間_dt"] = pd.to_datetime(usage_logs_copy["時間"], errors='coerce')
                     usage_logs_valid = usage_logs_copy.dropna(subset=["時間_dt"])
                     
