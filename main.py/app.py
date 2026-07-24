@@ -7,7 +7,7 @@ from google.oauth2.service_account import Credentials
 import re
 import plotly.express as px
 import plotly.graph_objects as go
-from openai import OpenAI
+from groq import Groq
 # -------------------------------------------------------------------
 # 0. 頁面基本設定 (預設展開側邊欄)
 # -------------------------------------------------------------------
@@ -234,19 +234,19 @@ else:
 page = st.sidebar.radio("系統導覽：", menu_options, label_visibility="collapsed")
 
 # -------------------------------------------------------------------
-# 分頁 AI：🤖 AI 經營決策助理 (OpenAI GPT-4o-mini 版)
+# 分頁 AI：🤖 AI 經營決策助理 (Groq LLaMA 3.1 免費極速版)
 # -------------------------------------------------------------------
 if page == "🤖 AI 經營決策助理" and st.session_state.is_admin:
     st.title("🤖 老闆專屬 AI 經營決策助理")
-    st.caption("基於全公司實體倉管、專案預算與流水帳數據的即時 AI 決策諮詢 (Powered by OpenAI GPT-4o-mini)")
+    st.caption("基於全公司實體倉管、專案預算與流水帳數據的即時 AI 決策諮詢 (Powered by Groq LLaMA 3.1)")
     st.markdown("---")
     
-    # 檢查是否設定 OPENAI_API_KEY
-    if "OPENAI_API_KEY" not in st.secrets:
-        st.error("⚠️ 未在 Secrets 中找到 `OPENAI_API_KEY`，請完成設定以啟用 AI 助理。")
+    # 檢查是否設定 GROQ_API_KEY
+    if "GROQ_API_KEY" not in st.secrets:
+        st.error("⚠️ 未在 Secrets 中找到 `GROQ_API_KEY`，請完成設定以啟用 AI 助理。")
     else:
-        api_key = st.secrets["OPENAI_API_KEY"].strip()
-        client = OpenAI(api_key=api_key)
+        api_key = st.secrets["GROQ_API_KEY"].strip()
+        client = Groq(api_key=api_key)
         
         # 初始化聊天歷史
         if "chat_messages" not in st.session_state:
@@ -283,7 +283,7 @@ if page == "🤖 AI 經營決策助理" and st.session_state.is_admin:
                         
                         system_prompt = f"""
                         你是一位專精於水電工程與倉管財務的 AI 經營顧問，正在為公司老闆解答經營疑難雜症。
-                        請根據以下提供的公司【實體最新資料庫快照】進行思考與回答。請保持專業、精準、條理分明，並附帶具體的經營建議。
+                        請根據以下提供的公司【實體最新資料庫快照】進行思考與回答。請保持專業、精準、條理分明，並以繁體中文回答，附帶具體的經營建議。
 
                         【1. 工程專案預算清單】:
                         {proj_summary}
@@ -298,9 +298,9 @@ if page == "🤖 AI 經營決策助理" and st.session_state.is_admin:
                         {logs_sample}
                         """
                         
-                        # 2. 呼叫 OpenAI GPT-4o-mini 模型
+                        # 2. 呼叫 Groq 免費且強大的 llama-3.1-70b-versatile 或 8b 模型
                         response = client.chat.completions.create(
-                            model="gpt-4o-mini",
+                            model="llama-3.1-8b-instant",
                             messages=[
                                 {"role": "system", "content": system_prompt},
                                 {"role": "user", "content": prompt}
