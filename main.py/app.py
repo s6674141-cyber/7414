@@ -7,7 +7,7 @@ from google.oauth2.service_account import Credentials
 import re
 import plotly.express as px
 import plotly.graph_objects as go
-import google.generativeai as genai
+from google import genai
 
 # -------------------------------------------------------------------
 # 0. 頁面基本設定 (預設展開側邊欄)
