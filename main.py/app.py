@@ -8,9 +8,8 @@ import re
 import plotly.express as px
 import plotly.graph_objects as go
 from groq import Groq
-
 # -------------------------------------------------------------------
-# 0. 頁面基本設定 (預設展開側邊欄 & RWD Mobile First 設置)
+# 0. 頁面基本設定 (預設展開側邊欄)
 # -------------------------------------------------------------------
 plt.rcParams['font.sans-serif'] = ['Microsoft JhengHei', 'PingFang TC', 'Arial Unicode MS', 'DejaVu Sans']
 plt.rcParams['axes.unicode_minus'] = False
@@ -19,11 +18,11 @@ st.set_page_config(
     page_title="ProStock 雲端倉管與 AI BI 決策系統",
     page_icon="⚡",
     layout="wide",
-    initial_sidebar_state="auto"
+    initial_sidebar_state="expanded"
 )
 
 # -------------------------------------------------------------------
-# 🎨 UI / RWD CSS (大卡片、現場大按鈕、抗誤觸與極簡質感風)
+# 🎨 UI / CSS (v3.5 Full BI Edition 簡約質感深色風)
 # -------------------------------------------------------------------
 custom_css = """
     <style>
@@ -68,39 +67,16 @@ custom_css = """
         font-weight: 700 !important;
     }
 
-    /* 📱 現場防誤觸大按鈕 */
     .stButton>button {
         border-radius: 8px !important;
         font-weight: 600 !important;
         transition: all 0.2s ease-in-out !important;
         border: none !important;
-        min-height: 44px !important;
     }
     .stButton>button[kind="primary"] {
         background: linear-gradient(135deg, #2563EB 0%, #1D4ED8 100%) !important;
         color: white !important;
         box-shadow: 0 2px 4px rgba(37, 99, 235, 0.2) !important;
-    }
-
-    /* 📦 RWD 現場大卡片樣式 */
-    .material-card {
-        background-color: #FFFFFF;
-        border-radius: 12px;
-        padding: 16px;
-        margin-bottom: 10px;
-        box-shadow: 0 2px 6px rgba(0,0,0,0.04);
-        border: 1px solid #E2E8F0;
-    }
-
-    .badge {
-        display: inline-block;
-        background-color: #EFF6FF;
-        color: #1D4ED8;
-        font-size: 13px;
-        font-weight: 600;
-        padding: 2px 8px;
-        border-radius: 6px;
-        margin-right: 6px;
     }
 
     .stTabs [data-baseweb="tab-list"] {
@@ -217,11 +193,8 @@ def undo_last_log():
 if "is_admin" not in st.session_state:
     st.session_state.is_admin = False
 
-if "cart" not in st.session_state:
-    st.session_state.cart = {} # 領料車暫存: {mat_id: {"name":..., "qty":..., "unit":..., "stock_idx":...}}
-
 st.sidebar.markdown("### ⚡ ProStock 雲端倉管與 BI")
-st.sidebar.caption("v5.0 Mobile RWD + AI Assistant")
+st.sidebar.caption("v4.5 Full BI + AI Assistant")
 st.sidebar.markdown("---")
 
 role = st.sidebar.radio("👤 使用者權限切換：", ["👷 現場作業員 (師傅)", "🔑 系統管理員"])
@@ -325,7 +298,7 @@ if page == "🤖 AI 經營決策助理" and st.session_state.is_admin:
                         {logs_sample}
                         """
                         
-                        # 2. 呼叫 Groq 免費且強大的 llama-3.1-8b-instant 模型
+                        # 2. 呼叫 Groq 免費且強大的 llama-3.1-70b-versatile 或 8b 模型
                         response = client.chat.completions.create(
                             model="llama-3.1-8b-instant",
                             messages=[
@@ -341,13 +314,12 @@ if page == "🤖 AI 經營決策助理" and st.session_state.is_admin:
                         st.session_state.chat_messages.append({"role": "assistant", "content": ai_reply})
                     except Exception as e:
                         st.error(f"❌ AI 分析失敗：{e}")
-
 # -------------------------------------------------------------------
-# 分頁 A：📦 材料領用與進貨 (全新 RWD 大卡片 + 抗誤觸加減盤)
+# 分頁 A：📦 材料領用與進貨 (一般員工)
 # -------------------------------------------------------------------
 elif page == "📦 材料領用與進貨":
-    st.title("📱 現場極簡領料與進貨")
-    st.caption("大卡片抗誤觸介面 ‧ 支援手機快速領料與購物車結帳")
+    st.title("📦 材料領用與進貨登記")
+    st.caption("現場即時庫存扣抵與進貨補給面板")
     st.markdown("---")
     
     df_mat, sheet_mat = load_data("materials")
@@ -356,146 +328,77 @@ elif page == "📦 材料領用與進貨":
     proj_options = ["一般維修/未分類"]
     if not df_proj.empty and "工程案名稱" in df_proj.columns:
         proj_options = list(df_proj["工程案名稱"].dropna().unique())
+    
+    if not df_mat.empty:
+        df_mat["目前庫存"] = pd.to_numeric(df_mat["目前庫存"], errors='coerce').fillna(0).astype(int)
+        if "單價" not in df_mat.columns: df_mat["單價"] = 0
+        df_mat["單價"] = pd.to_numeric(df_mat["單價"], errors='coerce').fillna(0)
         
-    tab1, tab2 = st.tabs(["📤 師傅快速領料 (大卡片)", "📥 廠商進貨登記"])
-
-    # 📤 頁籤 1：RWD 大卡片與領料車模式
-    with tab1:
-        if not df_mat.empty:
-            df_mat["目前庫存"] = pd.to_numeric(df_mat["目前庫存"], errors='coerce').fillna(0).astype(int)
-            if "單價" not in df_mat.columns: df_mat["單價"] = 0
-            df_mat["單價"] = pd.to_numeric(df_mat["單價"], errors='coerce').fillna(0)
-
-            # 1️⃣ 專案選擇與快搜欄
-            proj_col, search_col = st.columns([1, 2])
-            with proj_col:
-                selected_proj = st.selectbox("👷 當前施工專案", proj_options)
-            with search_col:
-                search_mat = st.text_input("🔍 搜尋品名/規格/分類...", placeholder="例如: 6分, 電線, PVC...", label_visibility="visible")
-
-            # 2️⃣ 橫向分類標籤切換
-            cat_list = ["全部"] + [c for c in df_mat["分類"].dropna().unique() if str(c) != ""] if "分類" in df_mat.columns else ["全部"]
-            selected_cat = st.radio("分類快捷篩選", cat_list, horizontal=True, label_visibility="collapsed")
-
-            # 進行資料過濾
-            filtered_mat = df_mat.copy()
-            if selected_cat != "全部":
-                filtered_mat = filtered_mat[filtered_mat["分類"] == selected_cat]
-            if search_mat:
-                s_term = search_mat.strip().lower()
-                filtered_mat = filtered_mat[
-                    filtered_mat["材料編號"].astype(str).str.lower().str.contains(s_term) |
-                    filtered_mat["材料名稱"].astype(str).str.lower().str.contains(s_term) |
-                    filtered_mat["規格/尺寸"].astype(str).str.lower().str.contains(s_term) |
-                    filtered_mat["分類"].astype(str).str.lower().str.contains(s_term)
-                ]
-
-            st.markdown("---")
-
-            # 3️⃣ 渲染極簡 RWD 大卡片
-            if filtered_mat.empty:
-                st.info("🔍 未找到符合條件的材料品項")
-            else:
-                for idx, row in filtered_mat.iterrows():
-                    m_id = str(row["材料編號"])
-                    m_name = str(row["材料名稱"])
-                    m_spec = str(row.get("規格/尺寸", "標準"))
-                    m_cat = str(row.get("分類", "通用"))
-                    m_stock = int(row["目前庫存"])
-                    m_unit = str(row.get("單位", "個"))
-                    
-                    # 卡片本體 (HTML / CSS 渲染)
-                    st.markdown(f"""
-                    <div class="material-card">
-                        <div style="font-size: 18px; font-weight: 700; color: #0F172A;">📦 {m_name}</div>
-                        <div style="margin-top: 6px;">
-                            <span class="badge">#{m_spec}</span>
-                            <span class="badge">#{m_cat}</span>
-                        </div>
-                        <div style="margin-top: 8px; font-size: 14px; color: #475569;">
-                            剩餘庫存：<strong style="font-size: 16px; color: {'#059669' if m_stock > 5 else '#DC2626'};">{m_stock} {m_unit}</strong>
-                        </div>
-                    </div>
-                    """, unsafe_allow_html=True)
-                    
-                    # 漸進式揭露 & 加減按鈕列
-                    col_info, col_sub, col_add = st.columns([2, 1, 1])
-                    
-                    with col_info:
-                        with st.expander("ℹ️ 詳細資訊"):
-                            st.caption(f"🆔 材料編號：{m_id}")
-                            st.caption(f"💰 材料單價：${row.get('單價', 0)} 元")
-
-                    current_qty = st.session_state.cart.get(m_id, {}).get("qty", 0)
-
-                    with col_sub:
-                        if st.button("➖", key=f"sub_{m_id}", use_container_width=True):
-                            if current_qty > 0:
-                                st.session_state.cart[m_id]["qty"] -= 1
-                                if st.session_state.cart[m_id]["qty"] == 0:
-                                    del st.session_state.cart[m_id]
-                                st.rerun()
-
-                    with col_add:
-                        if st.button(f"➕ ({current_qty})", key=f"add_{m_id}", type="primary", use_container_width=True):
-                            if current_qty < m_stock:
-                                if m_id not in st.session_state.cart:
-                                    st.session_state.cart[m_id] = {"name": m_name, "qty": 1, "unit": m_unit, "stock_idx": idx}
-                                else:
-                                    st.session_state.cart[m_id]["qty"] += 1
-                                st.rerun()
-                            else:
-                                st.toast(f"⚠️ 已達庫存上限 ({m_stock} {m_unit})")
-
-            # 4️⃣ 🛒 領料結帳車 (Bottom Cart 展開機制)
-            total_cart_items = sum([item["qty"] for item in st.session_state.cart.values()])
-            if total_cart_items > 0:
-                st.markdown("---")
-                st.markdown("##### 🛒 領料清單核對")
+        st.subheader("📋 即時材料庫存狀態")
+        
+        search_mat = st.text_input("🔍 快速搜尋材料 (輸入名稱、編號、規格或分類)：", placeholder="例如: 電線, M001, 2.0mm, 管路類...")
+        filtered_mat = df_mat.copy()
+        if search_mat:
+            search_term = search_mat.strip().lower()
+            filtered_mat = filtered_mat[
+                filtered_mat["材料編號"].astype(str).str.lower().str.contains(search_term, na=False) |
+                filtered_mat["材料名稱"].astype(str).str.lower().str.contains(search_term, na=False) |
+                filtered_mat["規格/尺寸"].astype(str).str.lower().str.contains(search_term, na=False) |
+                filtered_mat["分類"].astype(str).str.lower().str.contains(search_term, na=False)
+            ]
+        
+        show_cols = ["材料編號", "材料名稱", "規格/尺寸", "分類", "目前庫存", "單位", "單價"]
+        valid_cols = [c for c in show_cols if c in filtered_mat.columns]
+        st.dataframe(filtered_mat[valid_cols], use_container_width=True)
+        st.markdown("<br>", unsafe_allow_html=True)
+        
+        tab1, tab2 = st.tabs(["📤 師傅領料登記", "📥 進貨入庫登記"])
+        
+        with tab1:
+            st.markdown("##### 領料出庫作業")
+            with st.form("emp_borrow_form"):
+                selected_mat = st.selectbox("選擇領料項目", df_mat["材料編號"].astype(str) + " - " + df_mat["材料名稱"])
+                selected_proj = st.selectbox("選擇所屬工程專案", proj_options)
+                borrow_qty = st.number_input("領取數量", min_value=1, step=1)
+                worker = st.text_input("領用師傅姓名")
+                submit_borrow = st.form_submit_button("確認領料出庫", type="primary")
                 
-                with st.expander(f"📋 已選擇 {total_cart_items} 項料件 (點擊展開核對明細)", expanded=True):
-                    for c_id, c_data in list(st.session_state.cart.items()):
-                        st.write(f"• **{c_data['name']}** × {c_data['qty']} {c_data['unit']}")
+                if submit_borrow:
+                    mat_id = selected_mat.split(" - ")[0]
+                    idx = df_mat[df_mat["材料編號"].astype(str) == mat_id].index[0]
+                    mat_name = df_mat.loc[idx, "材料名稱"]
+                    curr_qty = df_mat.loc[idx, "目前庫存"]
+                    unit = df_mat.loc[idx, "單位"]
                     
-                    worker_name = st.text_input("👷 請輸入領用師傅姓名", placeholder="例如: 王大明")
-                    
-                    if st.button("🚀 確認領出 (一鍵扣抵庫存)", type="primary", use_container_width=True):
-                        if worker_name:
-                            # 執行批量庫存扣抵與上記帳
-                            for c_id, c_data in st.session_state.cart.items():
-                                idx = c_data["stock_idx"]
-                                take_qty = c_data["qty"]
-                                df_mat.loc[idx, "目前庫存"] -= take_qty
-                                note_text = f"{selected_proj} - 師傅:{worker_name}"
-                                add_log_gsheet("領料出庫", c_data["name"], f"-{take_qty} {c_data['unit']}", note_text)
-                            
-                            save_data(sheet_mat, df_mat)
-                            st.session_state.cart = {} # 清空購物車
-                            st.success(f"✅ 成功領出料件！專案：{selected_proj} | 領用人：{worker_name}")
-                            st.rerun()
-                        else:
-                            st.warning("⚠️ 請填寫師傅姓名以完成登記。")
+                    if borrow_qty > curr_qty:
+                        st.error(f"❌ 庫存不足！目前僅剩庫存：{curr_qty} {unit}")
+                    else:
+                        df_mat.loc[idx, "目前庫存"] -= borrow_qty
+                        save_data(sheet_mat, df_mat)
+                        note_text = f"{selected_proj} - 師傅:{worker}"
+                        add_log_gsheet("領料出庫", mat_name, f"-{borrow_qty} {unit}", note_text)
+                        st.success(f"✅ 成功領用 [{mat_name}] {borrow_qty} {unit}！專案：{selected_proj}")
+                        st.rerun()
 
-    # 📥 頁籤 2：進貨入庫
-    with tab2:
-        st.markdown("##### 廠商補貨入庫作業")
-        with st.form("emp_in_form"):
-            selected_mat_in = st.selectbox("選擇進貨項目", df_mat["材料編號"].astype(str) + " - " + df_mat["材料名稱"], key="emp_in")
-            in_qty = st.number_input("進貨數量", min_value=1, step=1, key="emp_in_q")
-            vendor = st.text_input("進貨廠商 / 備註資訊")
-            submit_in = st.form_submit_button("確認進貨入庫", type="primary")
-            
-            if submit_in:
-                mat_id = selected_mat_in.split(" - ")[0]
-                idx = df_mat[df_mat["材料編號"].astype(str) == mat_id].index[0]
-                mat_name = df_mat.loc[idx, "材料名稱"]
-                unit = df_mat.loc[idx, "單位"]
+        with tab2:
+            st.markdown("##### 廠商補貨入庫作業")
+            with st.form("emp_in_form"):
+                selected_mat_in = st.selectbox("選擇進貨項目", df_mat["材料編號"].astype(str) + " - " + df_mat["材料名稱"], key="emp_in")
+                in_qty = st.number_input("進貨數量", min_value=1, step=1, key="emp_in_q")
+                vendor = st.text_input("進貨廠商 / 備註資訊")
+                submit_in = st.form_submit_button("確認進貨入庫", type="primary")
                 
-                df_mat.loc[idx, "目前庫存"] += in_qty
-                save_data(sheet_mat, df_mat)
-                add_log_gsheet("進貨入庫", mat_name, f"+{in_qty} {unit}", f"進貨廠商: {vendor}")
-                st.success(f"✅ 成功入庫 [{mat_name}] {in_qty} {unit}！")
-                st.rerun()
+                if submit_in:
+                    mat_id = selected_mat_in.split(" - ")[0]
+                    idx = df_mat[df_mat["材料編號"].astype(str) == mat_id].index[0]
+                    mat_name = df_mat.loc[idx, "材料名稱"]
+                    unit = df_mat.loc[idx, "單位"]
+                    
+                    df_mat.loc[idx, "目前庫存"] += in_qty
+                    save_data(sheet_mat, df_mat)
+                    add_log_gsheet("進貨入庫", mat_name, f"+{in_qty} {unit}", f"進貨廠商: {vendor}")
+                    st.success(f"✅ 成功入庫 [{mat_name}] {in_qty} {unit}！")
+                    st.rerun()
 
 # -------------------------------------------------------------------
 # 分頁 B：🔨 工具借還與報修 (一般員工)
@@ -668,7 +571,9 @@ elif page == "📊 BI 經營決策儀表板" and st.session_state.is_admin:
             usage_logs["消耗金額"] = 0
             usage_logs["工程案名稱"] = "無"
 
+        # ---------------------------------------------------------------
         # 📊 頂部 KPI 卡片區
+        # ---------------------------------------------------------------
         total_budget = pd.to_numeric(df_proj["材料總預算"], errors='coerce').sum() if not df_proj.empty else 0
         total_spent = usage_logs["消耗金額"].sum() if not usage_logs.empty else 0
         df_mat["庫存總價值"] = df_mat["目前庫存"] * df_mat["單價"]
@@ -682,8 +587,11 @@ elif page == "📊 BI 經營決策儀表板" and st.session_state.is_admin:
         
         st.markdown("<br>", unsafe_allow_html=True)
         
+        # ---------------------------------------------------------------
         # 【圖表 1】專案材料預算 vs 實際消耗金額
+        # ---------------------------------------------------------------
         st.markdown("##### 📈 【圖表 1】專案材料預算 vs 實際消耗金額 (Budget vs. Actual Cost)")
+        
         if not df_proj.empty:
             df_proj["材料總預算"] = pd.to_numeric(df_proj["材料總預算"], errors='coerce').fillna(0)
             cost_summary = usage_logs.groupby("工程案名稱")["消耗金額"].sum().reset_index() if not usage_logs.empty else pd.DataFrame(columns=["工程案名稱", "消耗金額"])
@@ -726,7 +634,9 @@ elif page == "📊 BI 經營決策儀表板" and st.session_state.is_admin:
 
         st.markdown("---")
         
+        # ---------------------------------------------------------------
         # 【圖表 2A & 2B】動態領用 Top 5 vs 靜態庫存資產 Top 5
+        # ---------------------------------------------------------------
         col_a, col_b = st.columns(2)
         
         with col_a:
@@ -772,7 +682,9 @@ elif page == "📊 BI 經營決策儀表板" and st.session_state.is_admin:
 
         st.markdown("---")
         
+        # ---------------------------------------------------------------
         # 【圖表 3】高頻損壞 / 設備報修警報 (TCO 分析)
+        # ---------------------------------------------------------------
         st.markdown("##### 🚨 【圖表 3】高頻損壞 / 設備報修警報 (TCO 總持有成本分析)")
         if not df_tools.empty:
             if "新機購入單價" not in df_tools.columns: df_tools["新機購入單價"] = 0
@@ -823,7 +735,9 @@ elif page == "📊 BI 經營決策儀表板" and st.session_state.is_admin:
 
         st.markdown("---")
         
+        # ---------------------------------------------------------------
         # 【圖表 4 & 5】每日領料金額動態趨勢 vs 工具外借超期滯留警報
+        # ---------------------------------------------------------------
         col_c, col_d = st.columns(2)
         
         with col_c:
@@ -921,7 +835,7 @@ elif page == "🏗️ 工程案預算管理" and st.session_state.is_admin:
             st.rerun()
 
 # -------------------------------------------------------------------
-# 分頁 E：📦 材料庫存總覽 (管理員表格檢視模式)
+# 分頁 E：📦 材料庫存總覽 (管理員全功能)
 # -------------------------------------------------------------------
 elif page == "📦 材料庫存總覽" and st.session_state.is_admin:
     st.title("📦 材料庫存全功能管理模組")
