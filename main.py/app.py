@@ -235,7 +235,7 @@ else:
 page = st.sidebar.radio("系統導覽：", menu_options, label_visibility="collapsed")
 
 # -------------------------------------------------------------------
-# 分頁 AI：🤖 AI 經營決策助理 (老闆專屬對話框)
+# 分頁 AI：🤖 AI 經營決策助理 (老闆專屬對話框 - 自動偵測模型修正版)
 # -------------------------------------------------------------------
 if page == "🤖 AI 經營決策助理" and st.session_state.is_admin:
     st.title("🤖 老闆專屬 AI 經營決策助理")
@@ -244,9 +244,10 @@ if page == "🤖 AI 經營決策助理" and st.session_state.is_admin:
     
     # 檢查是否設定 GEMINI_API_KEY
     if "GEMINI_API_KEY" not in st.secrets:
-        st.error("⚠️ 未在 `.streamlit/secrets.toml` 中找到 `GEMINI_API_KEY`，請完成設定以啟用 AI 助理。")
+        st.error("⚠️ 未在 Secrets 中找到 `GEMINI_API_KEY`，請完成設定以啟用 AI 助理。")
     else:
-        genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
+        api_key = st.secrets["GEMINI_API_KEY"].strip()
+        genai.configure(api_key=api_key)
         
         # 初始化聊天歷史
         if "chat_messages" not in st.session_state:
@@ -300,18 +301,29 @@ if page == "🤖 AI 經營決策助理" and st.session_state.is_admin:
                         使用者問題: {prompt}
                         """
                         
-                        # 自動嘗試多種模型識別碼格式，避免 404
-                        try:
-                            model = genai.GenerativeModel('gemini-1.5-flash-latest')
-                            response = model.generate_content(system_prompt)
-                        except Exception:
-                            try:
-                                model = genai.GenerativeModel('gemini-2.0-flash')
-                                response = model.generate_content(system_prompt)
-                            except Exception:
-                                model = genai.GenerativeModel('models/gemini-1.5-flash')
-                                response = model.generate_content(system_prompt)
+                        # 2. 自動尋找該 API Key 當前可用且支援 generateContent 的模型名稱
+                        available_models = [
+                            m.name for m in genai.list_models() 
+                            if 'generateContent' in m.supported_generation_methods
+                        ]
                         
+                        target_model = None
+                        # 優先順序: 1.5-flash -> 1.5-pro -> 2.0-flash -> 列表中第一個可用模型
+                        for priority_name in ['gemini-1.5-flash', 'gemini-1.5-pro', 'gemini-2.0-flash', 'gemini-pro']:
+                            matched = [m for m in available_models if priority_name in m]
+                            if matched:
+                                target_model = matched[0]
+                                break
+                        
+                        if not target_model and available_models:
+                            target_model = available_models[0]
+                            
+                        if not target_model:
+                            raise Exception("找不到可用的 Gemini 生成模型，請確認 API Key 是否在 Google AI Studio 正確啟用。")
+                            
+                        # 3. 使用找到的最佳模型進行生成
+                        model = genai.GenerativeModel(target_model)
+                        response = model.generate_content(system_prompt)
                         ai_reply = response.text
                         
                         st.markdown(ai_reply)
