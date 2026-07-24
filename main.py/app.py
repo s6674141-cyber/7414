@@ -235,7 +235,7 @@ else:
 page = st.sidebar.radio("系統導覽：", menu_options, label_visibility="collapsed")
 
 # -------------------------------------------------------------------
-# 分頁 AI：🤖 AI 經營決策助理 (鎖定 gemini-1.5-flash 穩定高額度版)
+# 分頁 AI：🤖 AI 經營決策助理 (採用 Google 官方最新 genai SDK)
 # -------------------------------------------------------------------
 if page == "🤖 AI 經營決策助理" and st.session_state.is_admin:
     st.title("🤖 老闆專屬 AI 經營決策助理")
@@ -247,7 +247,7 @@ if page == "🤖 AI 經營決策助理" and st.session_state.is_admin:
         st.error("⚠️ 未在 Secrets 中找到 `GEMINI_API_KEY`，請完成設定以啟用 AI 助理。")
     else:
         api_key = st.secrets["GEMINI_API_KEY"].strip()
-        genai.configure(api_key=api_key)
+        client = genai.Client(api_key=api_key)
         
         # 初始化聊天歷史
         if "chat_messages" not in st.session_state:
@@ -276,7 +276,7 @@ if page == "🤖 AI 經營決策助理" and st.session_state.is_admin:
                         df_proj, _ = load_data("projects")
                         df_tools, _ = load_data("tools")
                         
-                        # 摘要數據 (控制在合理 Token 範圍內，維持穩定運作)
+                        # 摘要數據 (控制在精華範圍)
                         mat_summary = df_mat[["材料名稱", "目前庫存", "安全庫存量", "單價"]].head(50).to_string() if not df_mat.empty else "無"
                         proj_summary = df_proj.to_string() if not df_proj.empty else "無"
                         tools_summary = df_tools[["工具名稱", "品牌/廠牌", "型號", "新機購入單價", "狀態"]].head(40).to_string() if not df_tools.empty else "無"
@@ -301,9 +301,11 @@ if page == "🤖 AI 經營決策助理" and st.session_state.is_admin:
                         老闆問題: {prompt}
                         """
                         
-                        # 2. 嚴格使用官方標準完整路徑 models/gemini-1.5-flash，兼具高額度與穩定性
-                        model = genai.GenerativeModel('models/gemini-1.5-flash')
-                        response = model.generate_content(system_prompt)
+                        # 2. 新版 SDK 正確調用方式 (直接指定 gemini-1.5-flash)
+                        response = client.models.generate_content(
+                            model='gemini-1.5-flash',
+                            contents=system_prompt,
+                        )
                         
                         ai_reply = response.text
                         
